@@ -15,9 +15,9 @@ Current placeholder project structure
 │   ├── 📂 PPO/: files related to PPO training and testing
 │   └── 📂 SAC/: files related to SAC training and testing
 ├── 📂 ros2_ws/src/: contains the ROS2 packages for DRL integration
-│   ├── 📂 control/: launch files for agent description
+│   ├── 📂 control/: 
 │   ├── 📂 description/: launch files for agent description
-│   └── 📂 navDRL/: URDF files for camera, laser, and robot description
+│   └── 📂 navDRL/: 
 └── 📂 (planned) models/: contains the trained models for easy access from either the python or ros2_ws environments 
 ```
 
