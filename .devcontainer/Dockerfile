@@ -33,6 +33,15 @@ RUN rosdep update
 # Source the ROS setup file
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc
 
+# Install python 3 and pip
+RUN sudo apt-get install -y python3 python3-pip && \
+    sudo apt-get clean && \
+    sudo rm -rf /var/lib/apt/lists/*
+
+# Install necessary pip packages
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir gymnasium
+
 ################################
 ## ADD ANY CUSTOM SETUP BELOW ##
 ################################
