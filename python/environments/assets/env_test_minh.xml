@@ -1,0 +1,70 @@
+<mujoco model="test_scene">
+    <!-- Basic settings -->
+    <compiler angle="degree" coordinate="local"/>
+    <option timestep="0.01" gravity="0 0 -9.81"/>
+
+    <!-- Rendering options -->
+    <visual>
+        <map znear="0.01" zfar="50"/>
+        <quality shadowsize="2048"/>
+        <headlight ambient="0.3 0.3 0.3" diffuse="0.8 0.8 0.8"/>
+    </visual>
+
+    <!-- Define default colors -->
+    <default>
+        <default class="color_agent">
+            <geom rgba="0.5 0.2 0.2 1"/>
+        </default>
+        <default class="color_goal">
+            <geom rgba="0.2 0.5 0.2 0.5"/>
+        </default>
+        <default class="color_ground">
+            <geom rgba="0.9 0.9 0.9 1"/>
+        </default>
+        <default class="color_wall">
+            <geom rgba="0.5 0.5 0.5 1"/>
+        </default>
+    </default>
+
+    <!-- World definition -->
+    <worldbody>
+        <!-- Ground plane -->
+        <geom name="ground" type="plane" size="5 5 0.1" friction="0.5 0.1 0.1" class="color_ground"/>
+
+        <!-- Light source -->
+        <light name="light" pos="2 2 10" dir="-1 -1 -1" diffuse="1 1 1" specular="0.3 0.3 0.3" castshadow="true"/>
+
+        <!-- Camera -->
+        <camera name="camera" pos="2 2 2" euler="45 0 45" fovy="45"/>
+
+        <!-- Test object(s) -->
+        <body name="agent" pos="0 0 0.05">
+            <joint name="x_slide" type="slide" axis="1 0 0"/>
+            <joint name="y_slide" type="slide" axis="0 1 0"/>
+            <geom type="cylinder" size="0.1 0.05" class="color_agent"/>
+        </body>
+
+        <body name="goal" pos="0 -2 0.05">
+            <geom type="cylinder" size="0.1 0.05" contype="0" conaffinity="0" class="color_goal"/>
+        </body>
+
+
+        <!-- Boundaries -->
+        <body name="wall_1" pos="0 5.05 0.05">
+            <geom type="box" size="5.1 0.05 0.05" class="color_wall"/>
+        </body>
+
+        <body name="wall_3" pos="0 -5.05 0.05">
+            <geom type="box" size="5.1 0.05 0.05" class="color_wall"/>
+        </body>
+
+        <body name="wall_2" pos="5.05 0 0.05">
+            <geom type="box" size="0.05 5 0.05" class="color_wall"/>
+        </body>
+
+        <body name="wall_4" pos="-5.05 0 0.05">
+            <geom type="box" size="0.05 5 0.05" class="color_wall"/>
+        </body>
+
+    </worldbody>
+</mujoco>
