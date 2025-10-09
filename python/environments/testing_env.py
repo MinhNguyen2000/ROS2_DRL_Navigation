@@ -1,6 +1,7 @@
 from typing import Sequence
 import numpy as np 
 import gymnasium as gym
+import mujoco
 
 class TestingEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
@@ -9,8 +10,13 @@ class TestingEnv(gym.Env):
     def __init__(self, 
                  act_bound: Sequence[int|float], # either a list or tuple of float of x_linear bound, y_linear bound (optional) and z_angular bound
                  size: float = 5.0,
-                 render_mode = None
-                 ):
+                 render_mode: str | None = None,
+                 width: int = 480,
+                 height: int = 480,
+                 camera_id: int | None = None,
+                 camera_name: str | None = None,
+                 default_camera_config: dict[str, float | int] | None = None
+                ):
         
         """ Observation and Action Spaces """
         self.size = size       # assume 5x5 m^2 environment
@@ -66,6 +72,24 @@ class TestingEnv(gym.Env):
         self.window = None
         self.clock = None
 
+        # TODO - load the MuJoCo MJCF/URDF model and create a simulation object MjData
+        self.model = mujoco.MjModel.from_xml_path("assets/env_test_minh.xml")
+        self.data = mujoco.MjData(self.model)
+
+        # TODO - initialize the renderer
+        from gymnasium.envs.mujoco.mujoco_rendering import MujocoRenderer
+        self.renderer = MujocoRenderer(
+            self.model,
+            self.data,
+            default_cam_config=default_camera_config,
+            width=width,
+            heigh=height,
+            camera_id=camera_id,
+            camera_name=camera_name
+        )
+
     # TODO - create a _get_obs() and _get_info() methods
     # TODO - create the reset() method
     # TODO - create the step() method
+    # TODO - create the render() method
+    # TODO - create the close() method
