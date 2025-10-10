@@ -50,8 +50,10 @@ for geoms:
         <geom name = "front_wall" type = "box" contype = "1" conaffinity = "1" pos = "0 0.975 0.05" size = "0.95 0.025 0.05"/>
         <geom name = "back_wall" type = "box" contype = "1" conaffinity = "1" pos = "0 -0.975 0.05" size = "0.95 0.025 0.05"/>
 
+
         <!-- this is the agent -->
         <body name = "agent" pos = "-0.5 -0.5 0.005">
+            <!-- joints -->
             <joint name = "x_translate" type = "slide" axis = "1 0 0"/>
             <joint name = "y_translate" type = "slide" axis = "0 1 0"/>
             <joint name = "z_rotation" type = "hinge" axis = "0 0 1"/>
@@ -62,6 +64,7 @@ for geoms:
             <!-- rectangular piece so I can see it rotate -->
             <geom type = "box" contype = "0" conaffinity = "0" pos = "0 0 0.01" size = "0.01 0.03 0.005" rgba = "0 0 1 1"/>
         </body>
+
         <!-- this  is the task -->
         <geom name = "task" type = "cylinder" contype = "0" conaffinity = "0" pos = "0.5 0.5 0.005" size = "0.05 0.005" rgba = "0 1 0 1"/>
     </worldbody>
