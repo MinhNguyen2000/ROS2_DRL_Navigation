@@ -1,7 +1,7 @@
 <mujoco model="test_scene">
     <!-- Basic settings -->
     <compiler angle="degree" coordinate="local"/>
-    <option timestep="0.01" gravity="0 0 -9.81"/>
+    <option timestep="0.001" integrator = "RK4" gravity="0 0 -9.81"/>
 
     <!-- Rendering options -->
     <visual>
@@ -14,6 +14,9 @@
     <default>
         <default class="color_agent">
             <geom rgba="0.5 0.2 0.2 1"/>
+        </default>
+        <default class="color_transparent">
+            <geom rgba="0 0 0 0"/>
         </default>
         <default class="color_goal">
             <geom rgba="0.2 0.5 0.2 0.5"/>
@@ -29,7 +32,7 @@
     <!-- World definition -->
     <worldbody>
         <!-- Ground plane -->
-        <geom name="ground" type="plane" size="5 5 0.1" friction="0.5 0.1 0.1" class="color_ground"/>
+        <geom name="ground" type="plane" size="5 5 0.1" friction="0 0 0" class="color_ground"/>
 
         <!-- Light source -->
         <light name="light" pos="2 2 10" dir="-1 -1 -1" diffuse="1 1 1" specular="0.3 0.3 0.3" castshadow="true"/>
@@ -38,14 +41,27 @@
         <camera name="camera" pos="2 2 2" euler="45 0 45" fovy="45"/>
 
         <!-- Test object(s) -->
-        <body name="agent" pos="0 0 0.05">
-            <joint name="x_slide" type="slide" axis="1 0 0"/>
-            <joint name="y_slide" type="slide" axis="0 1 0"/>
+        <!-- <body name="agent" pos="0 0 0.05">
+            <joint name="agent_x_slide" type="slide" axis="1 0 0"/>
+            <joint name="agent_z_yaw" type="hinge" axis="0 0 1"/>
             <geom type="cylinder" size="0.1 0.05" class="color_agent"/>
+        </body> -->
+
+        <body name="agent_base" pos="0 0 0.01">
+            <joint name="agent_x_slide" type="slide" axis="1 0 0" damping="0.5"/>
+            <joint name="agent_y_slide" type="slide" axis="0 1 0" damping="0.5"/>
+            <geom type="cylinder" size="0.1 0.01" contype="0" conaffinity="0" class="color_transparent"/>
+
+            <body name="agent_yaw" pos="0 0 0">
+                <joint name="agent_z_yaw" type="hinge" axis="0 0 1" damping="0.5"/>
+                <geom type="cylinder" size="0.1 0.01" contype="1" conaffinity="1" mass="0.5" class="color_agent"/>
+                <geom type = "box" contype = "0" conaffinity = "0" pos = "0 0 0.015" size = "0.01 0.03 0.005" rgba = "0 0 1 1"/>
+            </body>
+            
         </body>
 
-        <body name="goal" pos="0 -2 0.05">
-            <geom type="cylinder" size="0.1 0.05" contype="0" conaffinity="0" class="color_goal"/>
+        <body name="goal" pos="0.5 0.5 0.01">
+            <geom type="cylinder" size="0.1 0.01" contype="0" conaffinity="0" class="color_goal"/>
         </body>
 
 
@@ -67,4 +83,11 @@
         </body>
 
     </worldbody>
+
+    <!-- Actuators to drive the agent -->
+    <actuator>
+        <motor joint="agent_x_slide" ctrlrange="-0.25 0.25" gear="0.2"/>
+        <motor joint="agent_y_slide" ctrlrange="-0.25 0.25" gear="0.2"/>
+        <motor joint="agent_z_yaw" ctrlrange="-0.25 0.25" gear="0.2"/>
+    </actuator>
 </mujoco>
