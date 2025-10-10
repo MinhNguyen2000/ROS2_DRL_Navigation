@@ -4,4 +4,7 @@
 # python3 -m mujoco.viewer --mjcf=assets/sanity_check.xml
 
 # --- Minh custom MuJoCo environments
-python3 -m mujoco.viewer --mjcf=assets/env_test_minh.xml
+# python3 -m mujoco.viewer --mjcf=assets/env_test_minh.xml
+
+# --- Matt custom MuJoCo environments
+python3 -m mujoco.viewer --mjcf=assets/env_test_matt.xml
