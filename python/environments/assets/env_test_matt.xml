@@ -1,0 +1,75 @@
+<!-- this is a testing environment for rendering in mujoco 
+
+this summary was derived by reading the documentation at:
+https://mujoco.readthedocs.io/en/latest/XMLreference.html#body-geom
+
+for lights:
+- pos: position of the light in the world frame
+- dir: direction the light is pointing at
+- diffuse: color of the light in RGB format
+
+
+for geoms:
+- name: a string name for the object
+- type: plane, box, sphere, capsule, cylinder, ellipsoid (this is the type of object obviously)
+- contype: what collision group(s) this geom belongs to
+- conaffinity: what groups this geom can collide with
+- pos: position of the geom in the world frame
+- size: size parameters for the geom (depends on type)
+- rgba: color of the geom in RGBA format
+
+-->
+
+<mujoco>
+    <!-- put config stuff here -->
+    <compiler angle = "degree" coordinate = "local"/>
+    <option timestep = "0.001" integrator = "RK4" gravity = "0 0 -9.81"/>
+    <default>
+        <joint damping = "0.25"/>
+    </default>
+
+    <!-- this is for the skybox -->
+    <asset>
+        <texture type = "skybox" builtin = "gradient" rgb1 = "1 1 1" rgb2 = ".6 .8 1" width = "256" height = "256"/>
+    </asset>
+
+    <!-- this is where the actual geometries are defined -->
+    <worldbody>
+        <!-- this is the light -->
+        <light diffuse = "1 1 1" pos = "0 0 5"/>
+
+        <!-- this is the camera -->
+        <camera name = "camera" pos = "2 2 2" euler = "45 0 45" fovy = "45"/>
+
+        <!-- this is the ground plane -->
+        <geom name = "ground_plane" type = "plane" contype = "1" conaffinity = "1" pos = "0 0 0" size = "1 1 0.1" rgba = "0.9 0.9 0.9 1"/>
+
+        <!-- these are the walls -->
+        <geom name = "right_wall" type = "box" contype = "1" conaffinity = "1" pos = "0.975 0 0.05" size = "0.025 1 0.05"/>
+        <geom name = "left_wall" type = "box" contype = "1" conaffinity = "1" pos = "-0.975 0 0.05" size = "0.025 1 0.05"/>
+        <geom name = "front_wall" type = "box" contype = "1" conaffinity = "1" pos = "0 0.975 0.05" size = "0.95 0.025 0.05"/>
+        <geom name = "back_wall" type = "box" contype = "1" conaffinity = "1" pos = "0 -0.975 0.05" size = "0.95 0.025 0.05"/>
+
+        <!-- this is the agent -->
+        <body name = "agent" pos = "-0.5 -0.5 0.005">
+            <joint name = "x_translate" type = "slide" axis = "1 0 0"/>
+            <joint name = "y_translate" type = "slide" axis = "0 1 0"/>
+            <joint name = "z_rotation" type = "hinge" axis = "0 0 1"/>
+
+            <!-- main body -->
+            <geom type = "cylinder" contype = "1" conaffinity = "1" size = "0.05 0.005" rgba = "1 0 0 1" mass = "0.5"/>
+
+            <!-- rectangular piece so I can see it rotate -->
+            <geom type = "box" contype = "0" conaffinity = "0" pos = "0 0 0.01" size = "0.01 0.03 0.005" rgba = "0 0 1 1"/>
+        </body>
+        <!-- this  is the task -->
+        <geom name = "task" type = "cylinder" contype = "0" conaffinity = "0" pos = "0.5 0.5 0.005" size = "0.05 0.005" rgba = "0 1 0 1"/>
+    </worldbody>
+
+    <!-- this is where the actuators are defined -->
+    <actuator>
+        <motor joint = "x_translate" ctrlrange = "-0.25 0.25" gear = "0.05"/>
+        <motor joint = "y_translate" ctrlrange = "-0.25 0.25" gear = "0.05"/>
+        <motor joint = "z_rotation" ctrlrange = "-0.25 0.25" gear =  "0.05"/>
+    </actuator>
+</mujoco>
