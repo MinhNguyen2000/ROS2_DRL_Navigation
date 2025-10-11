@@ -17,6 +17,13 @@ class TestingEnv(MujocoEnv):
                  camera_id: int | None = None,
                  camera_name: str | None = None,
                  default_camera_config: dict[str, float | int] | None = None
+                 default_camera_config: dict[str, float | int] | None = None,
+                 **kwargs
+                #  render_mode: str | None = None,
+                #  width: int = 480,
+                #  height: int = 480,
+                #  camera_id: int | None = None,
+                #  camera_name: str | None = None
                 ):
         
         """ Observation and Action Spaces """
@@ -48,9 +55,19 @@ class TestingEnv(MujocoEnv):
 
         # --- define the observation space
         self.observation_space = gym.spaces.Box(
+        observation_space = gym.spaces.Box(
             low=-size/2,        # [x_min, y_min, target_x_min, target_y_min]
             high=size/2,        # [x_max, y_max, target_x_max, target_y_max]
             shape=(4,), dtype=np.float32)
+        
+        MujocoEnv.__init__(
+            self,
+            xml_file=xml_file,
+            frame_skip=frame_skip,
+            observation_space=observation_space,
+            default_camera_config=default_camera_config,
+            **kwargs
+        )
         
         # --- define the action space (continuous linear and angular velocity)
         if not self._is_holonomic:
