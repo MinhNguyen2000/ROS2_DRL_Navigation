@@ -55,8 +55,13 @@ class TestingEnv(MujocoEnv):
     # TODO - create the step() method
     def step(self, action):
         # 1. move the simulation forward with the TRANSFORMED action (w.r.t. original frame)
-        self.do_simulation(action, self.frame)
-        # 2. collect the new observation (LiDAR simulation, location of agent/goal using the custom _get_obs())
+        # assuming the action is a (2,1) specifying (x_dot, theta_dot)
+        rot_matrix = [[np.cos(), -np.sin()],
+                      [np.sin(), np.cos()]]
+        self.do_simulation(action, self.frame_skip)
+
+        # 2. collect the new observation (LiDAR simulation, location of agent/goal using the custom _get_obs())\
+        observation = self._get_obs()
         # 3. termination condition
         # 4. reward
         # 5. info (optional)
