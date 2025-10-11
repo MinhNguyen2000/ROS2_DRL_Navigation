@@ -2,8 +2,9 @@ from typing import Sequence
 import numpy as np 
 import gymnasium as gym
 import mujoco
+from gymnasium.envs.mujoco import MujocoEnv
 
-class TestingEnv(gym.Env):
+class TestingEnv(MujocoEnv):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
     # TODO - actually create the render somehow
 
@@ -89,7 +90,18 @@ class TestingEnv(gym.Env):
         )
 
     # TODO - create a _get_obs() and _get_info() methods
+    def _get_obs():
+        ''' Function to obtain the LiDAR simulation scan and location of agent/goal at any instance '''
+        pass
     # TODO - create the reset() method
     # TODO - create the step() method
+    def step(self, action):
+        # 1. move the simulation forward with the TRANSFORMED action (w.r.t. original frame)
+        # 2. collect the new observation (LiDAR simulation, location of agent/goal using the custom _get_obs())
+        # 3. termination condition
+        # 4. reward
+        # 5. info (optional)
+        # 6. render if render_mode human
+        pass
     # TODO - create the render() method
     # TODO - create the close() method
