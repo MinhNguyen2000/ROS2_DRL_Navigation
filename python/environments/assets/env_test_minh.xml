@@ -47,7 +47,7 @@
         <light name="light" pos="2 2 10" dir="-1 -1 -1" diffuse="1 1 1" specular="0.3 0.3 0.3" castshadow="true"/>
 
         <!-- Camera -->
-        <camera name="camera" pos="0 0 10"/>
+        <camera name="camera" pos="0 0 5"/>
 
         <!-- Test object(s) -->
         <!-- <body name="agent" pos="0 0 0.05">
@@ -56,7 +56,8 @@
             <geom type="cylinder" size="0.1 0.05" class="color_agent"/>
         </body> -->
 
-        <body name="agent_base" pos="0 0 0.01" euler="0 0 0">
+        <!-- 2nd revision -->
+        <!-- <body name="agent_base" pos="0 0 0.01" euler="0 0 45">
             <joint name="agent_x_slide" type="slide" axis="1 0 0"/>
             <geom type="cylinder" size="0.1 0.01" contype="0" conaffinity="0" mass="0.1" class="color_transparent"/>
             <body name="agent_base_2" pos="0 0 0">
@@ -68,6 +69,15 @@
                     <geom type = "box" contype = "0" conaffinity = "0" pos = "0 0 0.015" size = "0.01 0.03 0.005" rgba = "0 0 1 1"/>
                 </body>
             </body>
+        </body> -->
+
+        <!-- 3rd revision -->
+        <body name="agent_base" pos="0 0 0.01" euler="0 0 0">
+            <joint name="agent_x_slide" type="slide" axis="1 0 0"/>
+            <joint name="agent_y_slide" type="slide" axis="0 1 0"/>
+            <joint name="agent_z_yaw" type="hinge" axis="0 0 1"/>
+            <geom type="cylinder" size="0.1 0.01" contype="1" conaffinity="1" mass="0.5" class="color_agent"/>
+            <geom type = "box" contype = "0" conaffinity = "0" pos = "0 0 0.015" size = "0.01 0.03 0.005" rgba = "0 0 1 1"/>
         </body>
 
         <body name="goal" pos="0.5 0.5 0.01">
@@ -95,9 +105,9 @@
     </worldbody>
 
     <!-- Actuators to drive the agent -->
-    <actuator>
-        <velocity name="x_linear" joint="agent_x_slide" ctrlrange="-0.25 0.25" gear="0.2"/>
-        <velocity name="y_linear" joint="agent_y_slide" ctrlrange="-0.25 0.25" gear="0.2"/>
-        <velocity name="z_angular" joint="agent_z_yaw" ctrlrange="-0.25 0.25" gear="0.2"/>
-    </actuator>
+    <!-- <actuator>
+        <motor name="x_linear" joint="agent_x_slide" ctrlrange="-0.25 0.25" gear="1"/>
+        <motor name="y_linear" joint="agent_y_slide" ctrlrange="-0.25 0.25" gear="1"/>
+        <motor name="z_angular" joint="agent_z_yaw" ctrlrange="-0.5 0.5" gear="1"/>
+    </actuator> -->
 </mujoco>

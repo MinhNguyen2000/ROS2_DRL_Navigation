@@ -71,7 +71,12 @@ class TestingEnv(MujocoEnv):
                                [np.sin(theta), np.cos(theta)]], dtype=np.float32)
         action[:2] = self.rot_matrix @ action[:2]
         
-        self.do_simulation(action, self.frame_skip)
+
+        self.data.qvel[:] = action
+
+        mujoco.mj_step(self.model, self.data, nstep=self.frame_skip)
+
+        # self.do_simulation(action, self.frame_skip)
 
         # 2. collect the new observation (LiDAR simulation, location of agent/goal using the custom _get_obs())\
         nobs = self._get_obs()
@@ -79,5 +84,6 @@ class TestingEnv(MujocoEnv):
         # 4. reward
         # 5. info (optional)
         # 6. render if render_mode human
+        return action
     # TODO - create the render() method
     # TODO - create the close() method
