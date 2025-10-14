@@ -48,9 +48,12 @@ class TestingEnv(MujocoEnv):
         self.clock = None
 
     # TODO - create a _get_obs() and _get_info() methods
-    def _get_obs():
+    def _get_obs(self):
         ''' Function to obtain the LiDAR simulation scan and location of agent/goal at any instance '''
-        pass
+        # Grab the current pose of the robot
+        pose = np.concatenate([self.data.qpos, self.data.qvel]).ravel()
+
+        return pose
     # TODO - create the reset() method
     # TODO - create the step() method
     def step(self, action):
@@ -61,7 +64,6 @@ class TestingEnv(MujocoEnv):
         self.do_simulation(action, self.frame_skip)
 
         # 2. collect the new observation (LiDAR simulation, location of agent/goal using the custom _get_obs())\
-        observation = self._get_obs()
         # 3. termination condition
         # 4. reward
         # 5. info (optional)
