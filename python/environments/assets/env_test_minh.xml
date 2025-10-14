@@ -8,6 +8,11 @@
         <map znear="0.01" zfar="50"/>
         <quality shadowsize="2048"/>
         <headlight ambient="0.3 0.3 0.3" diffuse="0.8 0.8 0.8"/>
+        <scale
+            framelength="0.1"
+            framewidth="0.005"
+            jointlength="0.1"
+            jointwidth="0.005" />
     </visual>
 
     <!-- Define default colors -->
@@ -42,7 +47,7 @@
         <light name="light" pos="2 2 10" dir="-1 -1 -1" diffuse="1 1 1" specular="0.3 0.3 0.3" castshadow="true"/>
 
         <!-- Camera -->
-        <camera name="camera" pos="2 2 2" euler="45 0 45" fovy="45"/>
+        <camera name="camera" pos="0 0 10"/>
 
         <!-- Test object(s) -->
         <!-- <body name="agent" pos="0 0 0.05">
@@ -63,7 +68,6 @@
                     <geom type = "box" contype = "0" conaffinity = "0" pos = "0 0 0.015" size = "0.01 0.03 0.005" rgba = "0 0 1 1"/>
                 </body>
             </body>
-            
         </body>
 
         <body name="goal" pos="0.5 0.5 0.01">
