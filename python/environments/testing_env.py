@@ -59,11 +59,15 @@ class TestingEnv(MujocoEnv):
     def step(self, action):
         # 1. move the simulation forward with the TRANSFORMED action (w.r.t. original frame)
         # assuming the action is a (2,1) specifying (x_dot, theta_dot)
-        rot_matrix = [[np.cos(), -np.sin()],
-                      [np.sin(), np.cos()]]
+        theta = self._get_obs()[2]
+        rot_matrix = np.array([[np.cos(theta), -np.sin(theta)],
+                               [np.sin(theta), np.cos(theta)]])
+        action[:2] = rot_matrix @ action[:2]
+        
         self.do_simulation(action, self.frame_skip)
 
         # 2. collect the new observation (LiDAR simulation, location of agent/goal using the custom _get_obs())\
+        nobs = self._get_obs()
         # 3. termination condition
         # 4. reward
         # 5. info (optional)
