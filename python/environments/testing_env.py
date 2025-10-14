@@ -47,22 +47,29 @@ class TestingEnv(MujocoEnv):
         self.window = None
         self.clock = None
 
+        self.rot_matrix = np.zeros((2,2))
+        self.goal_id = self.model.body("goal").id
+
     # TODO - create a _get_obs() and _get_info() methods
     def _get_obs(self):
         ''' Function to obtain the LiDAR simulation scan and location of agent/goal at any instance '''
         # Grab the current pose of the robot
-        pose = np.concatenate([self.data.qpos, self.data.qvel]).ravel()
+        agent_pose = np.concatenate([self.data.qpos, self.data.qvel]).ravel()
 
-        return pose
+        # Grab the current location of the goal
+        goal_pose = self.data.xpos[self.goal_id]
+
+        return agent_pose, goal_pose
     # TODO - create the reset() method
     # TODO - create the step() method
     def step(self, action):
         # 1. move the simulation forward with the TRANSFORMED action (w.r.t. original frame)
         # assuming the action is a (2,1) specifying (x_dot, theta_dot)
-        theta = self._get_obs()[2]
-        rot_matrix = np.array([[np.cos(theta), -np.sin(theta)],
-                               [np.sin(theta), np.cos(theta)]])
-        action[:2] = rot_matrix @ action[:2]
+        agent_pose = self._get_obs()[0]
+        theta = agent_pose[2]
+        self.rot_matrix = np.array([[np.cos(theta), -np.sin(theta)],
+                               [np.sin(theta), np.cos(theta)]], dtype=np.float32)
+        action[:2] = self.rot_matrix @ action[:2]
         
         self.do_simulation(action, self.frame_skip)
 
@@ -72,6 +79,5 @@ class TestingEnv(MujocoEnv):
         # 4. reward
         # 5. info (optional)
         # 6. render if render_mode human
-        pass
     # TODO - create the render() method
     # TODO - create the close() method
