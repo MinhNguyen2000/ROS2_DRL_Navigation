@@ -5,7 +5,7 @@ import mujoco
 from gymnasium.envs.mujoco import MujocoEnv
 
 class TestingEnv(MujocoEnv):
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 500}
     # TODO - actually create the render somehow
 
     def __init__(self, 
@@ -37,7 +37,7 @@ class TestingEnv(MujocoEnv):
         # --- initialize the simulator (model + data), set action space, and create a renderer
         MujocoEnv.__init__(
             self,
-            xml_file=xml_file,
+            model_path=xml_file,
             frame_skip=frame_skip,
             observation_space=observation_space,
             default_camera_config=default_camera_config,
