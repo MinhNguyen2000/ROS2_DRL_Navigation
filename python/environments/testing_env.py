@@ -5,7 +5,7 @@ import mujoco
 from gymnasium.envs.mujoco import MujocoEnv
 
 class TestingEnv(MujocoEnv):
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 500}
     # TODO - actually create the render somehow
 
     def __init__(self, 
@@ -37,7 +37,7 @@ class TestingEnv(MujocoEnv):
         # --- initialize the simulator (model + data), set action space, and create a renderer
         MujocoEnv.__init__(
             self,
-            xml_file=xml_file,
+            model_path=xml_file,
             frame_skip=frame_skip,
             observation_space=observation_space,
             default_camera_config=default_camera_config,
@@ -48,20 +48,26 @@ class TestingEnv(MujocoEnv):
         self.clock = None
 
     # TODO - create a _get_obs() and _get_info() methods
-    def _get_obs():
+    def _get_obs(self):
         ''' Function to obtain the LiDAR simulation scan and location of agent/goal at any instance '''
-        pass
+        # Grab the current pose of the robot
+        pose = np.concatenate([self.data.qpos, self.data.qvel]).ravel()
+
+        return pose
     # TODO - create the reset() method
     # TODO - create the step() method
     def step(self, action):
         # 1. move the simulation forward with the TRANSFORMED action (w.r.t. original frame)
         # assuming the action is a (2,1) specifying (x_dot, theta_dot)
-        rot_matrix = [[np.cos(), -np.sin()],
-                      [np.sin(), np.cos()]]
+        theta = self._get_obs()[2]
+        rot_matrix = np.array([[np.cos(theta), -np.sin(theta)],
+                               [np.sin(theta), np.cos(theta)]])
+        action[:2] = rot_matrix @ action[:2]
+        
         self.do_simulation(action, self.frame_skip)
 
         # 2. collect the new observation (LiDAR simulation, location of agent/goal using the custom _get_obs())\
-        observation = self._get_obs()
+        nobs = self._get_obs()
         # 3. termination condition
         # 4. reward
         # 5. info (optional)
