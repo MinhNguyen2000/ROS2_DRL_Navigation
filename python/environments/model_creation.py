@@ -266,22 +266,30 @@ class MakeEnv:
         adding in the agent, adding in the LiDAR, adding the task, and then compiling the ``spec`` into a usable ``model``.
 
         Args:
-            agent_pos:          a list containing the position of the robot, in format ``[X, Y, Z]``
-            task_pos:           a list containing the position of the task, in format ``[X, Y, Z]``
+            agent_pos:          a list containing the position of the robot, in format ``[X, Y]``
+            task_pos:           a list containing the position of the task, in format ``[X, Y]``
             n_rays:             an int specifying the desired number of rays for the LiDAR simulation
         
         """
+        # verify that the provided agent position is feasible:
+        if abs(agent_pos[0]) + self.agent_radius > self.ground_internal_length or abs(agent_pos[1]) + self.agent_radius > self.ground_internal_length:
+            raise ValueError("Provided position of the agent is outside the internal area of the arena!")
+        
+        # verify that the provided task position is feasible:
+        if abs(task_pos[0]) + self.agent_radius > self.ground_internal_length or abs(task_pos[1]) + self.agent_radius > self.ground_internal_length:
+            raise ValueError("Provided position of the task is unreachable by the agent!")
+
         # initialize the spec:
         self.make_spec()
 
         # add the agent:
-        self.add_agent(agent_pos = agent_pos)
+        self.add_agent(agent_pos = [agent_pos[0], agent_pos[1], self.agent_height])
 
         # add the lidar:
         self.add_lidar(n_rays)
 
         # add the task:
-        self.add_task(task_pos = task_pos)
+        self.add_task(task_pos = [task_pos[0], task_pos[1], self.task_height])
 
         # compile into model:
         self.compile()
@@ -303,7 +311,7 @@ class MakeEnv:
         self.data = mj.MjData(self.model)
 
         # launch a passive window using the model and the data contained within:
-        with mj.viewer.launch_passive(self.model, self.data) as self.viewer:
+        with mujoco.viewer.launch_passive(self.model, self.data) as self.viewer:
             # switch the camera:
             self.viewer.cam.type = mj.mjtCamera.mjCAMERA_FIXED
             self.viewer.cam.fixedcamid = self.model.camera(self.camera_name).id
@@ -314,5 +322,5 @@ class MakeEnv:
             
             # while viewer is active, step the model every timestep:
             while self.viewer.is_running():
-                mj.mj_step(self.model, self.data)
+                mujoco.mj_step(self.model, self.data)
                 self.viewer.sync()
