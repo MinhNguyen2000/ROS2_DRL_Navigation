@@ -48,20 +48,31 @@ class TestingEnv(MujocoEnv):
         self.clock = None
 
         self.rot_matrix = np.zeros((2,2))
+        self.agent_id = self.model.body("agent").id
         self.goal_id = self.model.body("goal").id
 
     # TODO - create a _get_obs() and _get_info() methods
     def _get_obs(self):
         ''' Function to obtain the LiDAR simulation scan and location of agent/goal at any instance '''
         # Grab the current pose of the robot
-        agent_pose = np.concatenate([self.data.qpos, self.data.qvel]).ravel()
+        agent_pos= self.data.xpos[self.agent_id][:2]                                    
+        agent_heading = np.array(self.data.qpos[2], dtype = np.float32).reshape(1)     
+        agent_obs = np.concatenate([
+            agent_pos,      # Global coordinates (x_world, y_world)
+            agent_heading,  # Local coordinate heading
+            self.data.qvel  # Local velocities w.r.t the joints
+            ]).ravel()
 
         # Grab the current location of the goal
-        goal_pose = self.data.xpos[self.goal_id]
+        goal_obs = self.data.xpos[self.goal_id]
 
-        return agent_pose, goal_pose
+        return agent_obs, goal_obs
     # TODO - create the reset() method
     # TODO - create the step() method
+
+    def _get_l2_distance(self, point_a: Sequence, point_b: Sequence):
+        return np.sqrt(np.square(point_a[0]-point_b[0]) + np.square(point_a[1]-point_b[1]))
+
     def step(self, action):
         # 1. move the simulation forward with the TRANSFORMED action (w.r.t. original frame)
         # assuming the action is a (2,1) specifying (x_dot, theta_dot)
@@ -70,20 +81,20 @@ class TestingEnv(MujocoEnv):
         self.rot_matrix = np.array([[np.cos(theta), -np.sin(theta)],
                                [np.sin(theta), np.cos(theta)]], dtype=np.float32)
         action[:2] = self.rot_matrix @ action[:2]
-        
 
         self.data.qvel[:] = action
 
         mujoco.mj_step(self.model, self.data, nstep=self.frame_skip)
 
-        # self.do_simulation(action, self.frame_skip)
-
         # 2. collect the new observation (LiDAR simulation, location of agent/goal using the custom _get_obs())\
-        nobs = self._get_obs()
-        # 3. termination condition
+        agent_pose, goal_pose = self._get_obs()
+
+        # 3. termination condition - 
+        d_goal = self._get_l2_distance(agent_pose[0:3], goal_pose)
         # 4. reward
+
         # 5. info (optional)
         # 6. render if render_mode human
-        return action
+        return d_goal
     # TODO - create the render() method
     # TODO - create the close() method
