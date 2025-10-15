@@ -35,19 +35,19 @@
     </default>
 
     <default>
-        <joint damping="0.5"/>
+        <joint damping="0"/>
     </default>
 
     <!-- World definition -->
     <worldbody>
         <!-- Ground plane -->
-        <geom name="ground" type="plane" size="5 5 0.1" friction="1 0 0" class="color_ground"/>
+        <geom name="ground" type="plane" size="5 5 0.1" friction="0 0 0" class="color_ground"/>
 
         <!-- Light source -->
         <light name="light" pos="2 2 10" dir="-1 -1 -1" diffuse="1 1 1" specular="0.3 0.3 0.3" castshadow="true"/>
 
         <!-- Camera -->
-        <camera name="camera" pos="0 0 5"/>
+        <camera name="camera" pos="0 0 10"/>
 
         <!-- Test object(s) -->
         <!-- <body name="agent" pos="0 0 0.05">
@@ -72,12 +72,16 @@
         </body> -->
 
         <!-- 3rd revision -->
-        <body name="agent" pos="0 0 0.01" euler="0 0 45">
+        <body name="agent" pos="0 0 0.01" euler="0 0 0">
             <joint name="agent_x_slide" type="slide" axis="1 0 0"/>
             <joint name="agent_y_slide" type="slide" axis="0 1 0"/>
             <joint name="agent_z_yaw" type="hinge" axis="0 0 1"/>
             <geom type="cylinder" size="0.1 0.01" contype="1" conaffinity="1" mass="0.5" class="color_agent"/>
             <geom type = "box" contype = "0" conaffinity = "0" pos = "0 0 0.015" size = "0.01 0.03 0.005" rgba = "0 0 1 1"/>
+
+            <!-- add the site for the lidar -->
+            <site name = "lidar_site" pos = "0 0 0.01" euler = "-90 0 0"/>
+            <site name = "lidar_site_2" pos = "0 0 0.01" euler = "-90 180 0"/>
         </body>
 
         <body name="goal" pos="0.5 0.5 0.01">
@@ -104,6 +108,10 @@
 
     </worldbody>
 
+    <sensor>
+        <rangefinder name = "lidar" site = "lidar_site"/>
+        <rangefinder name = "lidar_2" site = "lidar_site_2"/>
+    </sensor>
     <!-- Actuators to drive the agent -->
     <!-- <actuator>
         <motor name="x_linear" joint="agent_x_slide" ctrlrange="-0.25 0.25" gear="1"/>
