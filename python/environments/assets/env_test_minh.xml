@@ -35,13 +35,13 @@
     </default>
 
     <default>
-        <joint damping="0"/>
+        <joint damping="0.5"/>
     </default>
 
     <!-- World definition -->
     <worldbody>
         <!-- Ground plane -->
-        <geom name="ground" type="plane" size="5 5 0.1" friction="0 0 0" class="color_ground"/>
+        <geom name="ground" type="plane" size="5 5 0.1" friction="1 0 0" class="color_ground"/>
 
         <!-- Light source -->
         <light name="light" pos="2 2 10" dir="-1 -1 -1" diffuse="1 1 1" specular="0.3 0.3 0.3" castshadow="true"/>
@@ -72,7 +72,7 @@
         </body> -->
 
         <!-- 3rd revision -->
-        <body name="agent_base" pos="0 0 0.01" euler="0 0 0">
+        <body name="agent" pos="0 0 0.01" euler="0 0 45">
             <joint name="agent_x_slide" type="slide" axis="1 0 0"/>
             <joint name="agent_y_slide" type="slide" axis="0 1 0"/>
             <joint name="agent_z_yaw" type="hinge" axis="0 0 1"/>

@@ -51,6 +51,8 @@ class TestingEnv(MujocoEnv):
         self.agent_id = self.model.body("agent").id
         self.goal_id = self.model.body("goal").id
 
+        self.distance_threshold = 0.01
+
     # TODO - create a _get_obs() and _get_info() methods
     def _get_obs(self):
         ''' Function to obtain the LiDAR simulation scan and location of agent/goal at any instance '''
@@ -87,14 +89,27 @@ class TestingEnv(MujocoEnv):
         mujoco.mj_step(self.model, self.data, nstep=self.frame_skip)
 
         # 2. collect the new observation (LiDAR simulation, location of agent/goal using the custom _get_obs())\
-        agent_pose, goal_pose = self._get_obs()
+        nobs = self._get_obs()
+        agent_pose, goal_pose = nobs
 
-        # 3. termination condition - 
+        # 3. termination condition 
+        # when the agent is close to the goal
         d_goal = self._get_l2_distance(agent_pose[0:3], goal_pose)
-        # 4. reward
+        distance_cond = d_goal < self.distance_threshold
+        # when the agent is close to obstacles
+        obstacle_cond = False       # placeholder for when LiDAR observation is available
+        term = distance_cond or obstacle_cond
+        
+        # 4. reward - placeholder for reward values
+        if distance_cond:
+            rew = 200
+        elif obstacle_cond:
+            rew = -100
+        else:
+            rew = 5*d_goal
 
         # 5. info (optional)
         # 6. render if render_mode human
-        return d_goal
+        return nobs, rew, term
     # TODO - create the render() method
     # TODO - create the close() method
