@@ -1,10 +1,13 @@
+# import the MakeEnv class written by Matt
+# from environments import MakeEnv
+
 from typing import Sequence
 import numpy as np 
 import gymnasium as gym
-import mujoco
+import mujoco as mj
 from gymnasium.envs.mujoco import MujocoEnv
 
-class TestingEnv(MujocoEnv):
+class Nav2D(MujocoEnv):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 500}
 
     def __init__(self, 
@@ -52,9 +55,10 @@ class TestingEnv(MujocoEnv):
 
         self.distance_threshold = 0.01
 
-    # TODO - create a _get_info() methods
+    # TODO - create a _get_obs() and _get_info() methods
     def _get_obs(self):
         ''' Function to obtain the LiDAR simulation scan and location of agent/goal at any instance '''
+        
         # Grab the current pose of the robot
         agent_pos= self.data.xpos[self.agent_id][:2]                                    
         agent_heading = np.array(self.data.qpos[2], dtype = np.float32).reshape(1)     
@@ -67,40 +71,44 @@ class TestingEnv(MujocoEnv):
         # Grab the current location of the goal
         goal_obs = self.data.xpos[self.goal_id]
 
-        return agent_obs, goal_obs
+        # Grab the lidar sensor values
+        lidar_obs = self.data.sensordata
+
+        return agent_obs, goal_obs, lidar_obs
     
     # TODO - create the reset() method
-    # TODO - create the step() method
+    def reset():
+        pass
 
     def _get_l2_distance(self, point_a: Sequence, point_b: Sequence):
         return np.sqrt(np.square(point_a[0]-point_b[0]) + np.square(point_a[1]-point_b[1]))
 
+    # TODO - create the step() method
     def step(self, action):
         # 1. move the simulation forward with the TRANSFORMED action (w.r.t. original frame)
-        # assuming the action is a (2,1) specifying (x_dot, theta_dot)
-        agent_pose = self._get_obs()[0]
-        theta = agent_pose[2]
+        agent_obs = self._get_obs()[0]
+        theta = agent_obs[2]
         self.rot_matrix = np.array([[np.cos(theta), -np.sin(theta)],
-                               [np.sin(theta), np.cos(theta)]], dtype=np.float32)
+                                    [np.sin(theta), np.cos(theta)]], dtype=np.float32)
         action[:2] = self.rot_matrix @ action[:2]
 
         self.data.qvel[:] = action
 
-        mujoco.mj_step(self.model, self.data, nstep=self.frame_skip)
+        mj.mj_step(self.model, self.data, nstep=self.frame_skip)
 
         # 2. collect the new observation (LiDAR simulation, location of agent/goal using the custom _get_obs())\
         nobs = self._get_obs()
-        agent_pose, goal_pose = nobs
+        agent_obs, goal_obs, lidar_obs = nobs
 
         # 3. termination condition 
         # when the agent is close to the goal
-        d_goal = self._get_l2_distance(agent_pose[0:3], goal_pose)
+        d_goal = self._get_l2_distance(agent_obs[0:3], goal_obs)
         distance_cond = d_goal < self.distance_threshold
         # when the agent is close to obstacles
-        obstacle_cond = False       # placeholder for when LiDAR observation is available
+        obstacle_cond = False       # TODO - placeholder for when LiDAR observation is available
         term = distance_cond or obstacle_cond
         
-        # 4. reward - placeholder for reward values
+        # 4. reward - TODO - placeholder for reward values
         if distance_cond:
             rew = 200
         elif obstacle_cond:
@@ -109,7 +117,13 @@ class TestingEnv(MujocoEnv):
             rew = 5*d_goal
 
         # 5. info (optional)
-        # 6. render if render_mode human
+
+        # 6. render if render_mode human 
+        # TODO - test the gymnasium mujoco render
+        if self.render_mode == "human":
+            self.render()
+
         return nobs, rew, term
+    
     # TODO - create the render() method
     # TODO - create the close() method
