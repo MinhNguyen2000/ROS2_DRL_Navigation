@@ -55,7 +55,6 @@ class Nav2D(MujocoEnv):
         self.agent_radius = params["agent_settings"]["radius"]
         
         # --- define the uninitialized location of the agent and the target
-            # TODO - to be set randomly in the reset() method
         self._agent_loc = np.array([0, 0], dtype=np.float32)
         self._task_loc = np.array([-0.5, -0.5], dtype=np.float32)
 
@@ -144,7 +143,6 @@ class Nav2D(MujocoEnv):
 
         return agent_obs, goal_obs, lidar_obs
     
-    # TODO - create the reset() method
     def reset_model(self):
         noise_low = -0.1
         noise_high = 0.1
@@ -229,7 +227,7 @@ class Nav2D(MujocoEnv):
 
         term = distance_cond or obstacle_cond
         
-        # 4. reward - TODO - placeholder for reward values
+        # 4. reward
         if distance_cond:
             rew = 200.0
         elif obstacle_cond:
