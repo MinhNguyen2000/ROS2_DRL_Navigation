@@ -40,7 +40,7 @@ RUN sudo apt-get install -y python3 python3-pip && \
 
 # Install necessary pip packages
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir gymnasium
+    pip install --no-cache-dir gymnasium ipykernel
 
 ################################
 ## ADD ANY CUSTOM SETUP BELOW ##
