@@ -143,7 +143,7 @@ class Nav2D(MujocoEnv):
 
         return agent_obs, goal_obs, lidar_obs
     
-    def reset_model(self):
+    def reset_model(self, agent_randomize, goal_randomize, obstacle_randomize):
         noise_low = -0.1
         noise_high = 0.1
 
@@ -151,26 +151,41 @@ class Nav2D(MujocoEnv):
         angle_bound = np.pi
         goal_bound = self.size - self.agent_radius
 
+        # get a copy of the initial_qpos
         qpos = np.copy(self.init_qpos)
-        qpos[0:2] += self.np_random.uniform(size=2, low=-agent_bound, high=agent_bound)
-        qpos[2] += self.np_random.uniform(size=1, low=-angle_bound, high=angle_bound)
-        qpos[3:5] += (- self._task_loc + self.np_random.uniform(size=2, low=-goal_bound, high=goal_bound))
+        qvel = np.copy(self.init_qvel)
 
+        # if it is time to randomize the agent:
+        if agent_randomize:
+            # randomize the X,Y position of the agent by randomly sampling in a box around the center of the worldbody:
+            qpos[0:2] += self.np_random.uniform(size=2, low=-agent_bound, high=agent_bound)
 
-        qvel = self.init_qvel + self.np_random.uniform(
-            size=self.model.nv, low=noise_low, high=noise_high
-        )
+            # randomize the pose of the agent by randomly sampling between -pi and pi:
+            qpos[2] += self.np_random.uniform(size=1, low=-angle_bound, high=angle_bound)
+
+            # randomize the velocity of the agent:
+            qvel[0:2] += self.np_random.uniform(size=2, low=noise_low, high=noise_high)
+
+        # if it is time to randomize the goal:
+        if goal_randomize:
+            # randomize the X,Y position of the goal by randomly sampling in a box around the center of the worldbody:
+            qpos[3:5] += (-self._task_loc + self.np_random.uniform(size=2, low=-goal_bound, high=goal_bound))
+
+        if obstacle_randomize:
+            pass
 
         self.set_state(qpos, qvel)
         pass
 
     def reset(self,
               seed: int | None = None,
-              options: dict | None = None):
-        # TODO - add flags for when to randomize goal/agent/obstacles
+              options: dict | None = None,
+              agent_randomize: bool = False ,
+              goal_randomize: bool = False ,
+              obstacle_randomize: bool = False):
         mj.mj_resetData(self.model, self.data)
 
-        ob = self.reset_model()
+        ob = self.reset_model(agent_randomize, goal_randomize, obstacle_randomize)
         info = None
 
         if self.render_mode == "human":
@@ -238,7 +253,7 @@ class Nav2D(MujocoEnv):
         # 5. info (optional)
 
         # 6. render if render_mode human 
-        # TODO - test the gymnasium mujoco render
+        # TODO - MATT test the gymnasium mujoco render
         if self.render_mode == "human":
             self.render()
 
