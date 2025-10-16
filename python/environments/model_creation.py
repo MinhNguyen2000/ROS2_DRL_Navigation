@@ -246,6 +246,8 @@ class MakeEnv:
         """
         task = self.spec.worldbody.add_body(name = "goal", pos = task_pos)
         task.add_geom(name = "goal", type = mj.mjtGeom.mjGEOM_CYLINDER, size = [self.task_radius, self.task_height, 0], contype = 0, conaffinity = 0, rgba = [0, 1, 0, 1])
+        task.add_joint(name = "goal_x_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [1, 0, 0])
+        task.add_joint(name = "goal_y_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [0, 1, 0])
 
     # function for compiling the model:
     def compile(self):
