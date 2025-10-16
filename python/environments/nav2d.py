@@ -37,11 +37,12 @@ class Nav2D(MujocoEnv):
         with open(json_file) as f:
             params = json.load(f)
         size = params["ground_settings"]["internal_length"]
+        agent_radius = params["agent_settings"]["radius"]
         
         # --- define the uninitialized location of the agent and the target
             # TODO - to be set randomly in the reset() method
         self._agent_loc = np.array([0, 0], dtype=np.float32)
-        self._task_loc = np.array([0, 0], dtype=np.float32)
+        self._task_loc = np.array([0.5, 0.5], dtype=np.float32)
 
         # --- define the observation space
         self.observation_space = gym.spaces.Box(
@@ -88,7 +89,7 @@ class Nav2D(MujocoEnv):
 
         # --- termination conditions
         self.distance_threshold = 0.01
-        self.obstacle_threshold = 0.01
+        self.obstacle_threshold = 0.05 + agent_radius
 
     # TODO - create a _get_info() methods
     def _get_obs(self):
@@ -140,7 +141,7 @@ class Nav2D(MujocoEnv):
         d_goal = self._get_l2_distance(agent_obs[0:3], goal_obs)
         distance_cond = d_goal < self.distance_threshold
         # when the agent is close to obstacles
-        obstacle_cond = False       # TODO - placeholder for when LiDAR observation is available
+        obstacle_cond = min(lidar_obs) < self.obstacle_threshold
         term = distance_cond or obstacle_cond
         
         # 4. reward - TODO - placeholder for reward values
@@ -149,7 +150,7 @@ class Nav2D(MujocoEnv):
         elif obstacle_cond:
             rew = -100
         else:
-            rew = 5*d_goal
+            rew = d_goal
 
         # 5. info (optional)
 
@@ -160,5 +161,4 @@ class Nav2D(MujocoEnv):
 
         return nobs, rew, term
     
-    # TODO - create the render() method
     # TODO - create the close() method
