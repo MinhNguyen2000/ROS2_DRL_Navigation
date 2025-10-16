@@ -22,7 +22,22 @@ class Nav2D(MujocoEnv):
                  camera_id: int | None = None,
                  camera_name: str | None = None,
                 ):
-                
+        ''' class constructor to initialize the environment (Mujoco model and data), the observation space, and renderer
+        
+        Arguments:
+            json_file:              a string that containes the name of the environment parameters json file, which
+                                    contains compiler info, visual settings, and element settings (ground, wall, light, 
+                                    agent, goal)
+            frame_skip:             number of frames skipped in the gymnasium MuJoCo renderer
+            default_camera_config:  a dict object that contains camera placement information, such as 
+                                    ``azimuth``, ``elevation``, ``distance``, ``lookat``
+            render_mode:            a string that specifies the MuJoCo renderer mode, such as ``human``, ``rgb_array``, or ``None``
+            width:                  width of the rendering window
+            height:                 height of the rendering window
+            camera_id:              id of the default camera in the rendering window
+            camera_name:            name of the default camera in the rendering window
+        '''
+
         """ Observation and Action Spaces """
         # self.size = size       # assume 5x5 m^2 environment
 
@@ -93,7 +108,21 @@ class Nav2D(MujocoEnv):
 
     # TODO - create a _get_info() methods
     def _get_obs(self):
-        ''' Function to obtain the LiDAR simulation scan and location of agent/goal at any instance '''
+        ''' internal method to obtain the location of agent/goal and the simulated LiDAR scan at any instance 
+        
+        Returns:
+            tuple:
+                a tuple containing the agent observation, goal observation, and LiDAR scan
+
+                1. ``agent_obs``:  a stacked (6,) np.ndarray with the following components
+                                    ``agent_pos`` (2,) - the global position of the agent (to compare to the global goal postion)
+                                    ``agent_heading`` (1, ) - the local heading of the agent (w.r.t the agent's starting coordinate frame)
+                                    ``agent_vel`` (3,) - the local velocities of the agent (w.r.t the agent's starting coordinate frame)
+                
+                2. ``goal_obs``:   a (3,) np.ndarray with the x-y-z position of the goal in the global frame
+
+                3. ``lidar_obs``:  a np.ndarray with the LiDAR reading(s)
+        '''
         
         # Grab the current pose of the robot
         agent_pos= self.data.xpos[self.agent_id][:2]                                    
@@ -117,10 +146,30 @@ class Nav2D(MujocoEnv):
         pass
 
     def _get_l2_distance(self, point_a: Sequence, point_b: Sequence):
+        ''' internal method to obtain the Cartesian (l_2) distance between two points in 2D space
+        
+        Arguments:
+            point_a:    a list or sequence containing at least the x-y coordinates of the first point
+            point_b:    a list or sequence containing at least the x-y coordinates of the second point
+        Returns:
+            the 2-D Cartesian distance between the two points
+        '''
         return np.sqrt(np.square(point_a[0]-point_b[0]) + np.square(point_a[1]-point_b[1]))
 
     # TODO - create the step() method
     def step(self, action):
+        ''' method to execute one simulation step given the velocity command to the agent
+
+        Arguments:
+            action: the control action sent to the robot in terms of the local linear and angular velocities
+        
+        Returns:
+            tuple:
+                a tuple of (next observation, reward, termination)
+                1. next_observation:    tuple containing the agent state, goal state, and LiDAR scan after simulating one step
+                2. reward (float):      reward obtained after simulating the step
+                3. term (bool):         whether the episode is terminated
+        '''
         # 1. move the simulation forward with the TRANSFORMED action (w.r.t. original frame)
         agent_obs = self._get_obs()[0]
         theta = agent_obs[2]
@@ -146,9 +195,9 @@ class Nav2D(MujocoEnv):
         
         # 4. reward - TODO - placeholder for reward values
         if distance_cond:
-            rew = 200
+            rew = 200.0
         elif obstacle_cond:
-            rew = -100
+            rew = -100.0
         else:
             rew = d_goal
 
