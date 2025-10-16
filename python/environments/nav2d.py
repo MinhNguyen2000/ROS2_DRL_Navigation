@@ -51,18 +51,18 @@ class Nav2D(MujocoEnv):
         # TODO - handle full path expansion of json file
         with open(json_file) as f:
             params = json.load(f)
-        size = params["ground_settings"]["internal_length"]
-        agent_radius = params["agent_settings"]["radius"]
+        self.size = params["ground_settings"]["internal_length"]
+        self.agent_radius = params["agent_settings"]["radius"]
         
         # --- define the uninitialized location of the agent and the target
             # TODO - to be set randomly in the reset() method
         self._agent_loc = np.array([0, 0], dtype=np.float32)
-        self._task_loc = np.array([0.5, 0.5], dtype=np.float32)
+        self._task_loc = np.array([-0.5, -0.5], dtype=np.float32)
 
         # --- define the observation space
         self.observation_space = gym.spaces.Box(
-            low=-size/2,        # [x_min, y_min, target_x_min, target_y_min]
-            high=size/2,        # [x_max, y_max, target_x_max, target_y_max]
+            low=-self.size/2,        # [x_min, y_min, target_x_min, target_y_min]
+            high=self.size/2,        # [x_max, y_max, target_x_max, target_y_max]
             shape=(4,), dtype=np.float32)
         
         # --- load simulation params and initialize the simulation
@@ -74,6 +74,9 @@ class Nav2D(MujocoEnv):
         self.model.vis.global_.offwidth = width
         self.model.vis.global_.offheight = height
         self.data = mj.MjData(self.model)
+
+        self.init_qpos = self.data.qpos.ravel().copy()
+        self.init_qvel = self.data.qvel.ravel().copy()
 
         # --- initialize the renderer
         if "render_fps" in self.metadata:
@@ -103,8 +106,8 @@ class Nav2D(MujocoEnv):
         self.goal_id = self.model.body("goal").id
 
         # --- termination conditions
-        self.distance_threshold = 0.01
-        self.obstacle_threshold = 0.05 + agent_radius
+        self.distance_threshold = 0.05
+        self.obstacle_threshold = 0.05 + self.agent_radius
 
     # TODO - create a _get_info() methods
     def _get_obs(self):
@@ -142,8 +145,40 @@ class Nav2D(MujocoEnv):
         return agent_obs, goal_obs, lidar_obs
     
     # TODO - create the reset() method
-    def reset():
+    def reset_model(self):
+        noise_low = -0.1
+        noise_high = 0.1
+
+        agent_bound = self.size - 2*self.agent_radius
+        angle_bound = np.pi
+        goal_bound = self.size - self.agent_radius
+
+        qpos = np.copy(self.init_qpos)
+        qpos[0:2] += self.np_random.uniform(size=2, low=-agent_bound, high=agent_bound)
+        qpos[2] += self.np_random.uniform(size=1, low=-angle_bound, high=angle_bound)
+        qpos[3:5] += (- self._task_loc + self.np_random.uniform(size=2, low=-goal_bound, high=goal_bound))
+
+
+        qvel = self.init_qvel + self.np_random.uniform(
+            size=self.model.nv, low=noise_low, high=noise_high
+        )
+
+        self.set_state(qpos, qvel)
         pass
+
+    def reset(self,
+              seed: int | None = None,
+              options: dict | None = None):
+        # TODO - add flags for when to randomize goal/agent/obstacles
+        mj.mj_resetData(self.model, self.data)
+
+        ob = self.reset_model()
+        info = None
+
+        if self.render_mode == "human":
+            self.render()
+        
+        return ob, info
 
     def _get_l2_distance(self, point_a: Sequence, point_b: Sequence):
         ''' internal method to obtain the Cartesian (l_2) distance between two points in 2D space
@@ -191,6 +226,7 @@ class Nav2D(MujocoEnv):
         distance_cond = d_goal < self.distance_threshold
         # when the agent is close to obstacles
         obstacle_cond = min(lidar_obs) < self.obstacle_threshold
+
         term = distance_cond or obstacle_cond
         
         # 4. reward - TODO - placeholder for reward values
@@ -199,7 +235,7 @@ class Nav2D(MujocoEnv):
         elif obstacle_cond:
             rew = -100.0
         else:
-            rew = d_goal
+            rew = -d_goal
 
         # 5. info (optional)
 
