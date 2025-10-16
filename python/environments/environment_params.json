@@ -77,7 +77,7 @@
 
     "task_settings" : {
         "radius" : 0.1,
-        "height" : 0.01
+        "height" : 0.005
     }
 
 }

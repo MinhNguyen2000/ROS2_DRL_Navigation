@@ -6,44 +6,77 @@ import numpy as np
 import gymnasium as gym
 import mujoco as mj
 from gymnasium.envs.mujoco import MujocoEnv
+import json
+from model_creation import MakeEnv
 
 class Nav2D(MujocoEnv):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 500}
 
     def __init__(self, 
-                 xml_file: str = 'assets/env_test_minh.xml',
+                 json_file: str = "environment_params.json",
                  frame_skip: int = 2,
-                 size: float = 5.0,
                  default_camera_config: dict[str, float | int] | None = None,
-                 **kwargs
-                #  render_mode: str | None = None,
-                #  width: int = 480,
-                #  height: int = 480,
-                #  camera_id: int | None = None,
-                #  camera_name: str | None = None
+                 render_mode: str | None = None,
+                 width: int = 480,
+                 height: int = 480,
+                 camera_id: int | None = None,
+                 camera_name: str | None = None,
                 ):
-        
+                
         """ Observation and Action Spaces """
-        self.size = size       # assume 5x5 m^2 environment
+        # self.size = size       # assume 5x5 m^2 environment
+
+        self.width, self.height = width, height
+        self.render_mode = render_mode
+        self.camera_name = camera_name
+        self.camera_id = camera_id
+        self.frame_skip = frame_skip
+
+        # --- load the simulation parameters
+        # TODO - handle full path expansion of json file
+        with open(json_file) as f:
+            params = json.load(f)
+        size = params["ground_settings"]["internal_length"]
         
-        # --- define the uninitialized location of the agent and the target - to be set randomly in the reset() method
+        # --- define the uninitialized location of the agent and the target
+            # TODO - to be set randomly in the reset() method
         self._agent_loc = np.array([0, 0], dtype=np.float32)
-        self._target_loc = np.array([0, 0], dtype=np.float32)
+        self._task_loc = np.array([0, 0], dtype=np.float32)
 
         # --- define the observation space
-        observation_space = gym.spaces.Box(
+        self.observation_space = gym.spaces.Box(
             low=-size/2,        # [x_min, y_min, target_x_min, target_y_min]
             high=size/2,        # [x_max, y_max, target_x_max, target_y_max]
             shape=(4,), dtype=np.float32)
         
-        # --- initialize the simulator (model + data), set action space, and create a renderer
-        MujocoEnv.__init__(
-            self,
-            model_path=xml_file,
-            frame_skip=frame_skip,
-            observation_space=observation_space,
-            default_camera_config=default_camera_config,
-            **kwargs
+        # --- load simulation params and initialize the simulation
+        env =  MakeEnv(params)
+        env.make_env(agent_pos = self._agent_loc, 
+                     task_pos = self._task_loc, 
+                     n_rays = 36)
+        self.model = env.model
+        self.model.vis.global_.offwidth = width
+        self.model.vis.global_.offheight = height
+        self.data = mj.MjData(self.model)
+
+        # --- initialize the renderer
+        if "render_fps" in self.metadata:
+            assert (
+                int(np.round(1.0 / self.dt)) == self.metadata["render_fps"]
+            ), f'Expected value: {int(np.round(1.0 / self.dt))}, Actual value: {self.metadata["render_fps"]}'
+
+        from gymnasium.envs.mujoco.mujoco_rendering import MujocoRenderer
+
+        self.mujoco_renderer = MujocoRenderer(
+            self.model,
+            self.data,
+            default_cam_config = default_camera_config,
+            width           = self.width,
+            height          = self.height,
+            max_geom        = 1000,
+            camera_id       = self.camera_id,
+            camera_name     = self.camera_name,
+            visual_options  = {},
         )
 
         self.window = None
@@ -53,9 +86,11 @@ class Nav2D(MujocoEnv):
         self.agent_id = self.model.body("agent").id
         self.goal_id = self.model.body("goal").id
 
+        # --- termination conditions
         self.distance_threshold = 0.01
+        self.obstacle_threshold = 0.01
 
-    # TODO - create a _get_obs() and _get_info() methods
+    # TODO - create a _get_info() methods
     def _get_obs(self):
         ''' Function to obtain the LiDAR simulation scan and location of agent/goal at any instance '''
         
