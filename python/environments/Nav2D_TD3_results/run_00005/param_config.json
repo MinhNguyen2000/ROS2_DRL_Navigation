@@ -1,0 +1,25 @@
+{
+  "parameters": {
+    "device": "cuda",
+    "device_name": "NVIDIA T1000 8GB",
+    "model_name": "TD3_v0",
+    "alpha1": 0.001,
+    "alpha2": 0.001,
+    "beta": 0.001,
+    "gamma": 0.99,
+    "tau_c": 0.005,
+    "tau_a": 0.005,
+    "sigma": 0.5,
+    "clip": 1.0,
+    "buffer_size": 10000,
+    "buffer_init": 1000,
+    "batch_size": 512,
+    "update_f": 2,
+    "update_step": 2,
+    "train_iter": 100000,
+    "pass_count": 3,
+    "pass_score": -10,
+    "coeff_var_limit": 1.0,
+    "seed": 9
+  }
+}

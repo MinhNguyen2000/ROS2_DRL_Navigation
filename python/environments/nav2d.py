@@ -138,8 +138,8 @@ class Nav2D(MujocoEnv):
     
     def _set_action_space(self):
         ''' internal method to set the bounds on the agent's local x_linear, y_linear and z_angular velocities'''
-        low = np.array([-1, -0.0001, -0.5], dtype=np.float32)
-        high = np.array([1, 0.0001, 0.5], dtype=np.float32)
+        low = np.array([-1, -0.0001, -2.0], dtype=np.float32)
+        high = np.array([1, 0.0001, 2.0], dtype=np.float32)
         self.action_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
         return self.action_space
     
@@ -211,6 +211,11 @@ class Nav2D(MujocoEnv):
 
         self.set_state(qpos, qvel)
         ob = self._get_obs()
+
+        # get initial agent-goal distance
+        agent_pos = ob[0:2]
+        goal_pos = ob[6:8]
+        self.d_goal_last = self._get_l2_distance(agent_pos, goal_pos)
         return ob
 
     def reset(self,
@@ -285,8 +290,10 @@ class Nav2D(MujocoEnv):
         elif obstacle_cond:
             rew = -100.0
         else:
-            rew = -10*d_goal
+            rew = -100.0*(d_goal-self.d_goal_last)
 
+        self.d_goal_last = d_goal
+        
         # 5. info (optional)
         info = {"reward": rew, "dist_cond": distance_cond, "obst_cond": obstacle_cond}
         # 6. render if render_mode human 
