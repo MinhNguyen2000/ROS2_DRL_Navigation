@@ -186,7 +186,7 @@ class Nav2D(MujocoEnv):
         mj.mj_resetData(self.model, self.data)
 
         ob = self.reset_model(agent_randomize, goal_randomize, obstacle_randomize)
-        info = None
+        info = {}
 
         if self.render_mode == "human":
             self.render()
@@ -251,12 +251,12 @@ class Nav2D(MujocoEnv):
             rew = -d_goal
 
         # 5. info (optional)
-
+        info = {"reward": rew}
         # 6. render if render_mode human 
         # TODO - MATT test the gymnasium mujoco render
         if self.render_mode == "human":
             self.render()
 
-        return nobs, rew, term
+        return nobs, rew, term, False, info
     
     # TODO - create the close() method
