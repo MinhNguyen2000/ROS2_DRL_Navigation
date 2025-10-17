@@ -253,6 +253,7 @@ class Nav2D(MujocoEnv):
                 3. term (bool):         whether the episode is terminated
         '''
         # 1. move the simulation forward with the TRANSFORMED action (w.r.t. original frame)
+        action = np.copy(action)
         theta = self._get_obs()[2]
         self.rot_matrix = np.array([[np.cos(theta), -np.sin(theta)],
                                     [np.sin(theta), np.cos(theta)]], dtype=np.float32)
