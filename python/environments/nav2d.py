@@ -23,6 +23,7 @@ class Nav2D(MujocoEnv):
                  height: int = 480,
                  camera_id: int | None = None,
                  camera_name: str | None = None,
+                 visual_options: dict[int, bool] = {},
                 ):
         ''' class constructor to initialize the environment (Mujoco model and data), the observation space, and renderer
         
@@ -96,7 +97,7 @@ class Nav2D(MujocoEnv):
             max_geom        = 1000,
             camera_id       = self.camera_id,
             camera_name     = self.camera_name,
-            visual_options  = {},
+            visual_options  = visual_options,
         )
 
         self.window = None
