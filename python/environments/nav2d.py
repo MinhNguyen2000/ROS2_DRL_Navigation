@@ -6,6 +6,8 @@ import numpy as np
 import gymnasium as gym
 import mujoco as mj
 from gymnasium.envs.mujoco import MujocoEnv
+from gymnasium.envs.registration import register
+
 import json
 from model_creation import MakeEnv
 
@@ -258,5 +260,8 @@ class Nav2D(MujocoEnv):
             self.render()
 
         return nobs, rew, term, False, info
-    
-    # TODO - create the close() method
+
+register(
+    id="Nav2D-v0",
+    entry_point="nav2d:Nav2D"
+)
