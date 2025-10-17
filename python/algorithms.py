@@ -101,6 +101,7 @@ class TD3():
             update_f:       int   = 2,      # update frequency of online actor + offline target networks
             update_step:    int   = 1,   # number of gradient descent steps/updates of the policy & target networks
             iter:           int   = 5e4,          # number of training iterations
+            rand_goal_freq: int | None = None,          # frequency of changing the goal
             train_crit =    dict(pass_limit=5, pass_score=975, coeff_var_limit=0.1),
             result_folder:  str = 'invpend_TD3_results',
 
@@ -119,6 +120,7 @@ class TD3():
         self.update_f = update_f
         self.update_step = update_step
         self.train_iter = iter
+        self.rand_goal_freq = rand_goal_freq
         self.pass_limit = train_crit['pass_limit']
         self.pass_score = train_crit['pass_score']
         self.coeff_var_limit = train_crit['coeff_var_limit']
@@ -579,10 +581,13 @@ class TD3():
                         break
 
                 # --- reset/advance
-                obs = self.env.reset()[0]
+                eps += 1
+                if self.rand_goal_freq and eps % self.rand_goal_freq == 0:
+                    obs = self.env.reset(agent_randomize=False, goal_randomize=True)[0]
+                else:
+                    obs = self.env.reset()[0]
                 eps_step_count = 0
                 current_eps_reward = 0
-                eps += 1
                 done = False  
             
 

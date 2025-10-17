@@ -226,6 +226,7 @@ class Nav2D(MujocoEnv):
               obstacle_randomize: bool = False):
         mj.mj_resetData(self.model, self.data)
 
+        # TODO - when I create the env with gym.make("Nav2D-v0"), I can't use the reset method with the randomize flags
         ob = self.reset_model(agent_randomize, goal_randomize, obstacle_randomize)
         info = {}
 
