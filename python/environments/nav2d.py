@@ -138,8 +138,8 @@ class Nav2D(MujocoEnv):
     
     def _set_action_space(self):
         ''' internal method to set the bounds on the agent's local x_linear, y_linear and z_angular velocities'''
-        low = np.array([0, 0, -0.005], dtype=np.float32)
-        high = np.array([0.05, 0.05, 0.005], dtype=np.float32)
+        low = np.array([-1, -0.0001, -0.5], dtype=np.float32)
+        high = np.array([1, 0.0001, 0.5], dtype=np.float32)
         self.action_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
         return self.action_space
     
@@ -285,7 +285,7 @@ class Nav2D(MujocoEnv):
         elif obstacle_cond:
             rew = -100.0
         else:
-            rew = -d_goal
+            rew = -10*d_goal
 
         # 5. info (optional)
         info = {"reward": rew, "dist_cond": distance_cond, "obst_cond": obstacle_cond}
