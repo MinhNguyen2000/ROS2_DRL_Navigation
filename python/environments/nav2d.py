@@ -291,17 +291,21 @@ class Nav2D(MujocoEnv):
             rew = -100.0
         else:
             rew = -100.0*(d_goal-self.d_goal_last)
+            # TODO - Matt, you can play around with the agent's heading
+            #  aligning reward as part of the continuous reward term
 
         self.d_goal_last = d_goal
         
         # 5. info (optional)
         info = {"reward": rew, "dist_cond": distance_cond, "obst_cond": obstacle_cond}
+        
         # 6. render if render_mode human 
-        # TODO - MATT test the gymnasium mujoco render
         if self.render_mode == "human":
             self.render()
 
         return nobs, rew, term, False, info
+    
+    # TODO - Matt, how do we wrap the environment in a time wrapper?
 
 register(
     id="Nav2D-v0",
