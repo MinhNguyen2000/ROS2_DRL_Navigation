@@ -306,7 +306,7 @@ class Nav2D(MujocoEnv):
         elif obstacle_cond:
             rew = -100.0
         else:
-            rew = -100.0*(d_goal-self.d_goal_last)
+            rew = -200.0*(d_goal-self.d_goal_last) - 1
             # TODO - Matt, you can play around with the agent's heading
             #  aligning reward as part of the continuous reward term
 
@@ -320,8 +320,10 @@ class Nav2D(MujocoEnv):
             self.render()
 
         return nobs, rew, term, False, info
+    
 
 register(
     id="Nav2D-v0",
-    entry_point="nav2d:Nav2D"
+    entry_point="nav2d:Nav2D",
+    max_episode_steps=1_000,
 )
