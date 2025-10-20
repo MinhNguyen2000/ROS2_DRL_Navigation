@@ -122,9 +122,9 @@ class Nav2D(MujocoEnv):
         # TODO - handle the extra half LiDAR ray to remove the +1 at the end
         obs_space_size = 3 + 3 + 3 + self.n_rays + 1
         
-        # initialize the bounds as infinity
-        low = np.ones((obs_space_size,),dtype=np.float32) * -np.inf
-        high = np.ones((obs_space_size,),dtype=np.float32) * np.inf
+        # initialize the bounds as [-1, +1]
+        low = -np.ones((obs_space_size,),dtype=np.float32)
+        high = np.ones((obs_space_size,),dtype=np.float32)
         
         # set the x-y bounds of the agent and goal as half the arena size
         low[[0, 1, 6, 7]] = -self.size
