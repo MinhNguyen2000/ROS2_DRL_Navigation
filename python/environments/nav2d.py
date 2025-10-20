@@ -121,10 +121,16 @@ class Nav2D(MujocoEnv):
             (n_rays, ): LiDAR scans'''
         # TODO - handle the extra half LiDAR ray to remove the +1 at the end
         obs_space_size = 3 + 3 + 3 + self.n_rays + 1
+
+        # set the scale on the observation space:
+        # for an agent in the lower permissible area and a task in the upper permissible area, the largest LiDAR reading, and subsequent observation
+        # would be this value:
+        obs_scale_length = 2* (self.size - self.agent_radius)
+        obs_scale = np.sqrt(2 * obs_scale_length ** 2, dtype = np.float32)
         
-        # initialize the bounds as [-1, +1]
-        low = -np.ones((obs_space_size,),dtype=np.float32)
-        high = np.ones((obs_space_size,),dtype=np.float32)
+        # initialize the bounds as [-1, +1] scaled by some amount
+        low = -np.ones((obs_space_size,),dtype=np.float32) * obs_scale
+        high = np.ones((obs_space_size,),dtype=np.float32) * obs_scale
         
         # set the x-y bounds of the agent and goal as half the arena size
         low[[0, 1, 6, 7]] = -self.size
@@ -138,8 +144,10 @@ class Nav2D(MujocoEnv):
     
     def _set_action_space(self):
         ''' internal method to set the bounds on the agent's local x_linear, y_linear and z_angular velocities'''
-        low = np.array([-1, -0.0001, -2.0], dtype=np.float32)
-        high = np.array([1, 0.0001, 2.0], dtype=np.float32)
+        # low = np.array([-1, -0.0001, -2.0], dtype=np.float32)
+        # high = np.array([1, 0.0001, 2.0], dtype=np.float32)
+        low = -np.ones((3, ), dtype = np.float32)
+        high = np.ones((3, ), dtype = np.float32)
         self.action_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
         return self.action_space
     
@@ -210,7 +218,7 @@ class Nav2D(MujocoEnv):
             pass
 
         self.set_state(qpos, qvel)
-        ob = self._get_obs()
+        ob = self._get_obs() 
 
         # get initial agent-goal distance
         agent_pos = ob[0:2]
@@ -224,6 +232,10 @@ class Nav2D(MujocoEnv):
               agent_randomize: bool = False ,
               goal_randomize: bool = False ,
               obstacle_randomize: bool = False):
+        
+        # call the reset method of the parent class:
+        super().reset(seed = seed)
+
         mj.mj_resetData(self.model, self.data)
 
         # TODO - when I create the env with gym.make("Nav2D-v0"), I can't use the reset method with the randomize flags
@@ -305,8 +317,6 @@ class Nav2D(MujocoEnv):
             self.render()
 
         return nobs, rew, term, False, info
-    
-    # TODO - Matt, how do we wrap the environment in a time wrapper?
 
 register(
     id="Nav2D-v0",
