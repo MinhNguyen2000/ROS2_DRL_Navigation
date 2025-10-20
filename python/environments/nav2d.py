@@ -186,7 +186,10 @@ class Nav2D(MujocoEnv):
         ob = np.concat((agent_obs, goal_obs, lidar_obs), dtype=np.float32)
         return ob
     
-    def reset_model(self, agent_randomize, goal_randomize, obstacle_randomize):
+    def reset_model(self, 
+                    agent_randomize: bool = False, 
+                    goal_randomize: bool = False, 
+                    obstacle_randomize: bool = False):
         noise_low = -0.1
         noise_high = 0.1
 
