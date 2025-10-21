@@ -51,8 +51,8 @@ class Nav2D(MujocoEnv):
         self.n_rays = 36
 
         self.episode_counter = 0
-        self.agent_frequency = 5
-        self.goal_frequency = 25
+        self.agent_frequency = 1
+        self.goal_frequency = 10
         self.obstacle_frequency = 25
 
         self.agent_randomize = False
@@ -137,13 +137,13 @@ class Nav2D(MujocoEnv):
         obs_scale_length = 2* (self.size - self.agent_radius)
         obs_scale = np.sqrt(2 * obs_scale_length ** 2, dtype = np.float32)
         
-        # initialize the bounds as [-1, +1] scaled by some amount
+        # initialize the bounds as [-1, +1] scaled by some amount:
         low = -np.ones((obs_space_size,),dtype=np.float32) * obs_scale
         high = np.ones((obs_space_size,),dtype=np.float32) * obs_scale
         
         # set the x-y bounds of the agent and goal as half the arena size
-        low[[0, 1, 6, 7]] = -self.size
-        high[[0, 1, 6, 7]] = self.size
+        low[[0, 1, 6, 7]] = -(self.size - self.agent_radius)
+        high[[0, 1, 6, 7]] = self.size - self.agent_radius
 
         self.observation_space = gym.spaces.Box(
             low=low,        # [x_min, y_min, target_x_min, target_y_min]
@@ -153,11 +153,9 @@ class Nav2D(MujocoEnv):
     
     def _set_action_space(self):
         ''' internal method to set the bounds on the agent's local x_linear, y_linear and z_angular velocities'''
-        # low = np.array([-1, -0.0001, -2.0], dtype=np.float32)
-        # high = np.array([1, 0.0001, 2.0], dtype=np.float32)
-        low = -np.ones((3, ), dtype = np.float32)
-        high = np.ones((3, ), dtype = np.float32)
-        self.action_space = gym.spaces.Box(low=low, high=high, dtype=np.float32)
+        self.action_low = -np.ones([3, ], dtype=np.float32)
+        self.action_high = np.ones([3, ], dtype=np.float32)
+        self.action_space = gym.spaces.Box(low=self.action_low, high=self.action_high, dtype=np.float32)
         return self.action_space
     
     def _get_obs(self):
@@ -309,6 +307,11 @@ class Nav2D(MujocoEnv):
                                     [np.sin(theta), np.cos(theta)]], dtype=np.float32)
         action[:2] = self.rot_matrix @ action[:2]
 
+        action_pre = np.copy(action)
+
+        # clip action:
+        action = np.clip(action, a_min = self.action_low, a_max = self.action_high)
+
         self.data.qvel[0:3] = action
 
         mj.mj_step(self.model, self.data, nstep=self.frame_skip)
@@ -336,22 +339,23 @@ class Nav2D(MujocoEnv):
             rew = -100
         else:
             # penalize based on distance from goal:
-            # rew_dist = -100 * d_goal
+            rew_dist = -1 * d_goal
 
             # penalize moving away from goal, reward moving toward goal:
-            rew_diff = -100 * (d_goal - self.d_goal_last)
+            rew_diff = -1_000 * (d_goal - self.d_goal_last)
 
             # penalize every timestep agent is not at goal:
             rew_time = -1
 
             # total reward term:
-            rew = rew_diff + rew_time
+            rew = rew_dist + rew_diff + rew_time
             # rew = rew_dist + rew_diff + rew_time
             # rew = rew_time
 
             # TODO - Matt, you can play around with the agent's heading
             #  aligning reward as part of the continuous reward term
-            print(f"distance to goal is: {d_goal} | difference is: {rew_diff}", end = "\r")
+            # print(f"episode: {self.episode_counter} | action: {action} | d_goal is: {d_goal:.5f} | dist_rew is: {rew_dist:.5f} | diff_rew is: {rew_diff:.5f}", end = "\r")
+            print(f"episode: {self.episode_counter} | action_pre: {np.round(action_pre, 3)} | action: {np.round(action, 3)}", end = "\r")
 
         self.d_goal_last = d_goal
         
