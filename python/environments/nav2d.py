@@ -108,7 +108,7 @@ class Nav2D(MujocoEnv):
         self.goal_id = self.model.body("goal").id
 
         # --- termination conditions
-        self.distance_threshold = 0.05
+        self.distance_threshold = 0.01
         self.obstacle_threshold = 0.05 + self.agent_radius
 
     def _set_observation_space(self):
@@ -230,16 +230,17 @@ class Nav2D(MujocoEnv):
         return ob
 
     def reset(self,
+              *,
               seed: int | None = None,
-              options: dict | None = None,
-              agent_randomize: bool = False ,
-              goal_randomize: bool = False ,
-              obstacle_randomize: bool = False):
+              options: dict | None = None):
         
         # call the reset method of the parent class:
         super().reset(seed = seed)
 
         mj.mj_resetData(self.model, self.data)
+        agent_randomize = options.get("agent_randomize", False) if options else False
+        goal_randomize = options.get("goal_randomize", False) if options else False
+        obstacle_randomize = options.get("obstacle_randomize", False) if options else False
 
         # TODO - when I create the env with gym.make("Nav2D-v0"), I can't use the reset method with the randomize flags
         ob = self.reset_model(agent_randomize, goal_randomize, obstacle_randomize)
