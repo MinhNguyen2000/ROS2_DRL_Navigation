@@ -117,7 +117,7 @@ class Nav2D(MujocoEnv):
         self.goal_id = self.model.body("goal").id
 
         # --- termination conditions
-        self.distance_threshold = 0.025
+        self.distance_threshold = 0.05
         self.obstacle_threshold = 0.05 + self.agent_radius
 
     def _set_observation_space(self):
@@ -331,13 +331,27 @@ class Nav2D(MujocoEnv):
         
         # 4. reward
         if distance_cond:
-            rew = 200.0
+            rew = 200
         elif obstacle_cond:
-            rew = -100.0
+            rew = -100
         else:
-            rew = -200.0*(d_goal-self.d_goal_last) - 1
+            # penalize based on distance from goal:
+            # rew_dist = -100 * d_goal
+
+            # penalize moving away from goal, reward moving toward goal:
+            rew_diff = -100 * (d_goal - self.d_goal_last)
+
+            # penalize every timestep agent is not at goal:
+            rew_time = -1
+
+            # total reward term:
+            rew = rew_diff + rew_time
+            # rew = rew_dist + rew_diff + rew_time
+            # rew = rew_time
+
             # TODO - Matt, you can play around with the agent's heading
             #  aligning reward as part of the continuous reward term
+            print(f"distance to goal is: {d_goal} | difference is: {rew_diff}", end = "\r")
 
         self.d_goal_last = d_goal
         
