@@ -50,6 +50,15 @@ class Nav2D(MujocoEnv):
         self.frame_skip = frame_skip
         self.n_rays = 36
 
+        self.episode_counter = 0
+        self.agent_frequency = 2
+        self.goal_frequency = 4
+        self.obstacle_frequency = 4
+
+        self.agent_randomize = False
+        self.goal_randomize = False
+        self.obstacle_randomize = False
+
         # --- load the simulation parameters
         # TODO - handle full path expansion of json file
         with open(json_file) as f:
@@ -108,7 +117,7 @@ class Nav2D(MujocoEnv):
         self.goal_id = self.model.body("goal").id
 
         # --- termination conditions
-        self.distance_threshold = 0.01
+        self.distance_threshold = 0.025
         self.obstacle_threshold = 0.05 + self.agent_radius
 
     def _set_observation_space(self):
@@ -198,7 +207,7 @@ class Nav2D(MujocoEnv):
         goal_bound = self.size - self.agent_radius
 
         # get a copy of the initial_qpos
-        qpos = np.copy(self.init_qpos)
+        qpos = np.copy(self.init_qpos)      # initially agent is at [0,0], goal is at [-0.5, -0.5]
         qvel = np.copy(self.init_qvel)
 
         # if it is time to randomize the agent:
@@ -212,10 +221,14 @@ class Nav2D(MujocoEnv):
             # randomize the velocity of the agent:
             qvel[0:2] += self.np_random.uniform(size=2, low=noise_low, high=noise_high)
 
+            self.init_qpos[0:3] = qpos[0:3]
+            self.init_qvel[0:2] = qvel[0:2]
+
         # if it is time to randomize the goal:
         if goal_randomize:
             # randomize the X,Y position of the goal by randomly sampling in a box around the center of the worldbody:
             qpos[3:5] += (-self._task_loc + self.np_random.uniform(size=2, low=-goal_bound, high=goal_bound))
+            self.init_qpos[3:5] = qpos[3:5]
 
         if obstacle_randomize:
             pass
@@ -230,22 +243,37 @@ class Nav2D(MujocoEnv):
         return ob
 
     def reset(self,
-              *,
               seed: int | None = None,
               options: dict | None = None):
+        
+        # increment a counter:
+        self.episode_counter += 1
+        print(f"episode is: {self.episode_counter}", end = "\r")
         
         # call the reset method of the parent class:
         super().reset(seed = seed)
 
+        # reset model data:
         mj.mj_resetData(self.model, self.data)
-        agent_randomize = options.get("agent_randomize", False) if options else False
-        goal_randomize = options.get("goal_randomize", False) if options else False
-        obstacle_randomize = options.get("obstacle_randomize", False) if options else False
+
+        # check randomize conditions:
+        if self.episode_counter % self.agent_frequency == 0:
+           self.agent_randomize = True
+        if self.episode_counter % self.goal_frequency == 0:
+            self.goal_randomize = True
+        if self.episode_counter % self.obstacle_frequency == 0:
+            self.obstacle_randomize = True
 
         # TODO - when I create the env with gym.make("Nav2D-v0"), I can't use the reset method with the randomize flags
-        ob = self.reset_model(agent_randomize, goal_randomize, obstacle_randomize)
+        ob = self.reset_model(self.agent_randomize, self.goal_randomize, self.obstacle_randomize)
         info = {}
 
+        # reset flags:
+        self.agent_randomize = False
+        self.goal_randomize = False
+        self.obstacle_randomize = False
+
+        # render if mode == "human":
         if self.render_mode == "human":
             self.render()
         return ob, info
