@@ -51,9 +51,9 @@ class Nav2D(MujocoEnv):
         self.n_rays = 36
 
         self.episode_counter = 0
-        self.agent_frequency = 2
-        self.goal_frequency = 4
-        self.obstacle_frequency = 4
+        self.agent_frequency = 5
+        self.goal_frequency = 25
+        self.obstacle_frequency = 25
 
         self.agent_randomize = False
         self.goal_randomize = False
@@ -68,7 +68,7 @@ class Nav2D(MujocoEnv):
         
         # --- define the uninitialized location of the agent and the target
         self._agent_loc = np.array([0, 0], dtype=np.float32)
-        self._task_loc = np.array([-0.5, -0.5], dtype=np.float32)
+        self._task_loc = np.array([0, 0], dtype=np.float32)
         
         # --- load simulation params and initialize the simulation
         env =  MakeEnv(params)
@@ -213,7 +213,7 @@ class Nav2D(MujocoEnv):
         # if it is time to randomize the agent:
         if agent_randomize:
             # randomize the X,Y position of the agent by randomly sampling in a box around the center of the worldbody:
-            qpos[0:2] += self.np_random.uniform(size=2, low=-agent_bound, high=agent_bound)
+            qpos[0:2] = self.np_random.uniform(size=2, low=-agent_bound, high=agent_bound)
 
             # randomize the pose of the agent by randomly sampling between -pi and pi:
             qpos[2] += self.np_random.uniform(size=1, low=-angle_bound, high=angle_bound)
@@ -227,7 +227,7 @@ class Nav2D(MujocoEnv):
         # if it is time to randomize the goal:
         if goal_randomize:
             # randomize the X,Y position of the goal by randomly sampling in a box around the center of the worldbody:
-            qpos[3:5] += (-self._task_loc + self.np_random.uniform(size=2, low=-goal_bound, high=goal_bound))
+            qpos[3:5] = self.np_random.uniform(size=2, low=-goal_bound, high=goal_bound)
             self.init_qpos[3:5] = qpos[3:5]
 
         if obstacle_randomize:
