@@ -172,8 +172,8 @@ class Nav2D(MujocoEnv):
     def _set_action_space(self):
         ''' internal method to set the bounds on the agent's local x_linear, y_linear and z_angular velocities'''
         # set the low and high of the action space:
-        self.action_low = np.array([-1.0], dtype=np.float64)
-        self.action_high = np.array([1.0], dtype=np.float64)
+        self.action_low = np.array([-5.0], dtype=np.float64)
+        self.action_high = np.array([5.0], dtype=np.float64)
 
         # self.action_low = np.array([-1.0, -1.0], dtype=np.float64)
         # self.action_high = np.array([1.0, 1.0], dtype=np.float64)
@@ -381,19 +381,19 @@ class Nav2D(MujocoEnv):
             y_diff = goal_pos[1] - agent_pos[1]
 
             # find the desired heading to point agent to goal:
-            required_heading = np.arctan2(y_diff, x_diff, dtype = np.float64) % 2*np.pi
+            required_heading = np.arctan2(y_diff, x_diff, dtype = np.float64) % (2*np.pi)
 
             # wrap the current agent position between 0 and 2pi:
-            wrapped_theta = theta % 2*np.pi
+            wrapped_theta = theta % (2*np.pi)
 
             # find the absolute value of the difference in heading:
             abs_diff = np.abs(required_heading - wrapped_theta)
 
             # penalize based on this difference:
-            rew_angle = -1 * abs_diff
+            rew_heading = -1 * abs_diff
 
             # total reward term:
-            rew = rew_angle
+            rew = rew_heading
             # rew = rew_dist + rew_diff + rew_time + rew_angle
             # rew = rew_dist + rew_diff + rew_time
             # rew = rew_time
@@ -402,7 +402,7 @@ class Nav2D(MujocoEnv):
             # print(f"episode: {self.episode_counter} | action: {np.round(action_pre,3)} | d_goal is: {d_goal:.5f} | dist_rew is: {rew_dist:.5f} | diff_rew is: {rew_diff:.5f}", end = "\r")
             # print(f"episode: {self.episode_counter} | action_pre: {np.round(action_pre, 5)} | action: {np.round(action_rot, 5)}                 ", end = "\r")
             # print(f"num_goal_rand: {self.goal_rand_counter:3d} | goal_rand_bound: {self.goal_bound:7.5f} | goal_pos: {goal_pos}        ", end="\r")
-            print(f"required heading: {required_heading:1f} | current heading: {wrapped_theta:.1f} | abs_diff: {abs_diff:.1f} | rew: {rew:.2f} | action: {np.round(action_rot,2)}                          ", end = "\r")
+            print(f"required: {required_heading*180/np.pi:1f} | current: {wrapped_theta*180/np.pi:.1f} | abs_diff: {abs_diff*180/np.pi:.1f} | rew: {rew:.2f} | action: {np.round(action_rot,2)}                          ", end = "\r")
         self.d_goal_last = d_goal
         
         # 5. info (optional)
