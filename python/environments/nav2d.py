@@ -67,8 +67,8 @@ class Nav2D(MujocoEnv):
         self.agent_radius = params["agent_settings"]["radius"]
         
         # --- define the uninitialized location of the agent and the target
-        self._agent_loc = np.array([0, 0], dtype=np.float32)
-        self._task_loc = np.array([0, 0], dtype=np.float32)
+        self._agent_loc = np.array([0, 0], dtype=np.float64)
+        self._task_loc = np.array([0, 0], dtype=np.float64)
         
         # --- load simulation params and initialize the simulation
         env =  MakeEnv(params)
@@ -135,11 +135,11 @@ class Nav2D(MujocoEnv):
         # for an agent in the lower permissible area and a task in the upper permissible area, the largest LiDAR reading, and subsequent observation
         # would be this value:
         obs_scale_length = 2* (self.size - self.agent_radius)
-        obs_scale = np.sqrt(2 * obs_scale_length ** 2, dtype = np.float32)
+        obs_scale = np.sqrt(2 * obs_scale_length ** 2, dtype = np.float64)
         
         # initialize the bounds as [-1, +1] scaled by some amount:
-        low = -np.ones((obs_space_size,),dtype=np.float32) * obs_scale
-        high = np.ones((obs_space_size,),dtype=np.float32) * obs_scale
+        low = -np.ones((obs_space_size,),dtype=np.float64) * obs_scale
+        high = np.ones((obs_space_size,),dtype=np.float64) * obs_scale
         
         # set the x-y bounds of the agent and goal as half the arena size
         low[[0, 1, 6, 7]] = -(self.size - self.agent_radius)
@@ -148,18 +148,18 @@ class Nav2D(MujocoEnv):
         self.observation_space = gym.spaces.Box(
             low=low,        # [x_min, y_min, target_x_min, target_y_min]
             high=high,        # [x_max, y_max, target_x_max, target_y_max]
-            dtype=np.float32)
+            dtype=np.float64)
         return self.observation_space
     
     def _set_action_space(self):
         ''' internal method to set the bounds on the agent's local x_linear, y_linear and z_angular velocities'''
-        # self.action_low = -np.ones([3, ], dtype=np.float32)
-        # self.action_high = np.ones([3, ], dtype=np.float32)
-        # self.action_low = np.array([-1.0, -0.001, -1.0], dtype=np.float32)
-        # self.action_high = np.array([1.0, 0.001, 1.0], dtype=np.float32)
-        self.action_low = np.array([-1.0, -1.0], dtype=np.float32)
-        self.action_high = np.array([1.0, 1.0], dtype=np.float32)
-        self.action_space = gym.spaces.Box(low=self.action_low, high=self.action_high, dtype=np.float32)
+        # self.action_low = -np.ones([3, ], dtype=np.float64)
+        # self.action_high = np.ones([3, ], dtype=np.float64)
+        # self.action_low = np.array([-1.0, -0.001, -1.0], dtype=np.float64)
+        # self.action_high = np.array([1.0, 0.001, 1.0], dtype=np.float64)
+        self.action_low = np.array([-1.0, -1.0], dtype=np.float64)
+        self.action_high = np.array([1.0, 1.0], dtype=np.float64)
+        self.action_space = gym.spaces.Box(low=self.action_low, high=self.action_high, dtype=np.float64)
         return self.action_space
     
     def _get_obs(self):
@@ -181,7 +181,7 @@ class Nav2D(MujocoEnv):
         
         # Grab the current pose of the robot
         agent_pos= self.data.xpos[self.agent_id][:2]                                    
-        agent_heading = np.array(self.data.qpos[2], dtype = np.float32).reshape(1)     
+        agent_heading = np.array(self.data.qpos[2], dtype = np.float64).reshape(1)     
         agent_obs = np.concatenate([
             agent_pos,              # Global coordinates (x_world, y_world)
             agent_heading,          # Local coordinate heading
@@ -194,7 +194,7 @@ class Nav2D(MujocoEnv):
         # Grab the lidar sensor values
         lidar_obs = self.data.sensordata
 
-        ob = np.concat((agent_obs, goal_obs, lidar_obs), dtype=np.float32)
+        ob = np.concat((agent_obs, goal_obs, lidar_obs), dtype=np.float64)
         return ob
     
     def reset_model(self, 
@@ -305,19 +305,19 @@ class Nav2D(MujocoEnv):
                 3. term (bool):         whether the episode is terminated
         '''
         # 1. move the simulation forward with the TRANSFORMED action (w.r.t. original frame)
-        action_copy = np.copy(action)
-        action_pre = np.array([action_copy[0], 0, action_copy[1]], dtype=np.float32)
+        action_pre = np.array([action[0], 0, action[1]], dtype=np.float64)
+        action_rot = np.copy(action_pre)
 
         # # clipped action
         # action = np.clip(action, a_min = self.action_low, a_max = self.action_high)
         theta = self._get_obs()[2]
         self.rot_matrix = np.array([[np.cos(theta), -np.sin(theta)],
-                                    [np.sin(theta), np.cos(theta)]], dtype=np.float32)
+                                    [np.sin(theta), np.cos(theta)]], dtype=np.float64)
         
         # action transformed into global frame
-        action_pre[:2] = self.rot_matrix @ action_pre[:2]
+        action_rot[:2] = self.rot_matrix @ action_rot[:2]
 
-        self.data.qvel[0:3] = action_pre
+        self.data.qvel[0:3] = action_rot
 
         mj.mj_step(self.model, self.data, nstep=self.frame_skip)
 
@@ -359,8 +359,8 @@ class Nav2D(MujocoEnv):
 
             # TODO - Matt, you can play around with the agent's heading
             #  aligning reward as part of the continuous reward term
-            print(f"episode: {self.episode_counter} | action: {np.round(action_pre,3)} | d_goal is: {d_goal:.5f} | dist_rew is: {rew_dist:.5f} | diff_rew is: {rew_diff:.5f}", end = "\r")
-            # print(f"episode: {self.episode_counter} | action_pre: {np.round(action_pre, 3)} | action: {np.round(action, 3)}", end = "\r")
+            # print(f"episode: {self.episode_counter} | action: {np.round(action_pre,3)} | d_goal is: {d_goal:.5f} | dist_rew is: {rew_dist:.5f} | diff_rew is: {rew_diff:.5f}", end = "\r")
+            print(f"episode: {self.episode_counter} | action_pre: {np.round(action_pre, 5)} | action: {np.round(action_rot, 5)}                 ", end = "\r")
 
         self.d_goal_last = d_goal
         
@@ -429,8 +429,8 @@ class Nav2D_Holonomic(MujocoEnv):
         self.agent_radius = params["agent_settings"]["radius"]
         
         # --- define the uninitialized location of the agent and the target
-        self._agent_loc = np.array([0, 0], dtype=np.float32)
-        self._task_loc = np.array([0, 0], dtype=np.float32)
+        self._agent_loc = np.array([0, 0], dtype=np.float64)
+        self._task_loc = np.array([0, 0], dtype=np.float64)
         
         # --- load simulation params and initialize the simulation
         env =  MakeEnv(params)
@@ -497,11 +497,11 @@ class Nav2D_Holonomic(MujocoEnv):
         # for an agent in the lower permissible area and a task in the upper permissible area, the largest LiDAR reading, and subsequent observation
         # would be this value:
         obs_scale_length = 2* (self.size - self.agent_radius)
-        obs_scale = np.sqrt(2 * obs_scale_length ** 2, dtype = np.float32)
+        obs_scale = np.sqrt(2 * obs_scale_length ** 2, dtype = np.float64)
         
         # initialize the bounds as [-1, +1] scaled by some amount:
-        low = -np.ones((obs_space_size,),dtype=np.float32) * obs_scale
-        high = np.ones((obs_space_size,),dtype=np.float32) * obs_scale
+        low = -np.ones((obs_space_size,),dtype=np.float64) * obs_scale
+        high = np.ones((obs_space_size,),dtype=np.float64) * obs_scale
         
         # set the x-y bounds of the agent and goal as half the arena size
         low[[0, 1, 6, 7]] = -(self.size - self.agent_radius)
@@ -510,18 +510,18 @@ class Nav2D_Holonomic(MujocoEnv):
         self.observation_space = gym.spaces.Box(
             low=low,        # [x_min, y_min, target_x_min, target_y_min]
             high=high,        # [x_max, y_max, target_x_max, target_y_max]
-            dtype=np.float32)
+            dtype=np.float64)
         return self.observation_space
     
     def _set_action_space(self):
         ''' internal method to set the bounds on the agent's local x_linear, y_linear and z_angular velocities'''
-        # self.action_low = -np.ones([3, ], dtype=np.float32)
-        # self.action_high = np.ones([3, ], dtype=np.float32)
-        # self.action_low = np.array([-1.0, -0.001, -1.0], dtype=np.float32)
-        # self.action_high = np.array([1.0, 0.001, 1.0], dtype=np.float32)
-        self.action_low = np.array([-1.0, -1.0, -1.0], dtype=np.float32)
-        self.action_high = np.array([1.0, 1.0, 1.0], dtype=np.float32)
-        self.action_space = gym.spaces.Box(low=self.action_low, high=self.action_high, dtype=np.float32)
+        # self.action_low = -np.ones([3, ], dtype=np.float64)
+        # self.action_high = np.ones([3, ], dtype=np.float64)
+        # self.action_low = np.array([-1.0, -0.001, -1.0], dtype=np.float64)
+        # self.action_high = np.array([1.0, 0.001, 1.0], dtype=np.float64)
+        self.action_low = np.array([-1.0, -1.0, -1.0], dtype=np.float64)
+        self.action_high = np.array([1.0, 1.0, 1.0], dtype=np.float64)
+        self.action_space = gym.spaces.Box(low=self.action_low, high=self.action_high, dtype=np.float64)
         return self.action_space
     
     def _get_obs(self):
@@ -543,7 +543,7 @@ class Nav2D_Holonomic(MujocoEnv):
         
         # Grab the current pose of the robot
         agent_pos= self.data.xpos[self.agent_id][:2]                                    
-        agent_heading = np.array(self.data.qpos[2], dtype = np.float32).reshape(1)     
+        agent_heading = np.array(self.data.qpos[2], dtype = np.float64).reshape(1)     
         agent_obs = np.concatenate([
             agent_pos,              # Global coordinates (x_world, y_world)
             agent_heading,          # Local coordinate heading
@@ -556,7 +556,7 @@ class Nav2D_Holonomic(MujocoEnv):
         # Grab the lidar sensor values
         lidar_obs = self.data.sensordata
 
-        ob = np.concat((agent_obs, goal_obs, lidar_obs), dtype=np.float32)
+        ob = np.concat((agent_obs, goal_obs, lidar_obs), dtype=np.float64)
         return ob
     
     def reset_model(self, 
@@ -673,7 +673,7 @@ class Nav2D_Holonomic(MujocoEnv):
         # action = np.clip(action, a_min = self.action_low, a_max = self.action_high)
         theta = self._get_obs()[2]
         self.rot_matrix = np.array([[np.cos(theta), -np.sin(theta)],
-                                    [np.sin(theta), np.cos(theta)]], dtype=np.float32)
+                                    [np.sin(theta), np.cos(theta)]], dtype=np.float64)
         
         # action transformed into global frame
         action_pre[:2] = self.rot_matrix @ action_pre[:2]
