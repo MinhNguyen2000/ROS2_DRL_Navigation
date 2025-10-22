@@ -132,7 +132,7 @@ class Nav2D(MujocoEnv):
         obs_space_size = 3 + 3 + 3 + self.n_rays + 1
 
         # set the scale on the observation space:
-        # for an agent in the lower permissible area and a task in the upper permissible area, the largest LiDAR reading, and subsequent observation
+        # for an agent in the lower permissible area and a task in the upper permissible area, the largest LiDAR reading, and subsequent observation,
         # would be this value:
         obs_scale_length = 2* (self.size - self.agent_radius)
         obs_scale = np.sqrt(2 * obs_scale_length ** 2, dtype = np.float64)
@@ -266,7 +266,6 @@ class Nav2D(MujocoEnv):
         if self.episode_counter % self.obstacle_frequency == 0:
             self.obstacle_randomize = True
 
-        # TODO - when I create the env with gym.make("Nav2D-v0"), I can't use the reset method with the randomize flags
         ob = self.reset_model(self.agent_randomize, self.goal_randomize, self.obstacle_randomize)
         info = {}
 
@@ -396,7 +395,7 @@ class Nav2D_Holonomic(MujocoEnv):
         ''' class constructor to initialize the environment (Mujoco model and data), the observation space, and renderer
         
         Arguments:
-            json_file:              a string that containes the name of the environment parameters json file, which
+            json_file:              a string that contains the name of the environment parameters json file, which
                                     contains compiler info, visual settings, and element settings (ground, wall, light, 
                                     agent, goal)
             frame_skip:             number of frames skipped in the gymnasium MuJoCo renderer
@@ -634,7 +633,6 @@ class Nav2D_Holonomic(MujocoEnv):
         if self.episode_counter % self.obstacle_frequency == 0:
             self.obstacle_randomize = True
 
-        # TODO - when I create the env with gym.make("Nav2D-v0"), I can't use the reset method with the randomize flags
         ob = self.reset_model(self.agent_randomize, self.goal_randomize, self.obstacle_randomize)
         info = {}
 
@@ -726,8 +724,8 @@ class Nav2D_Holonomic(MujocoEnv):
 
             # TODO - Matt, you can play around with the agent's heading
             #  aligning reward as part of the continuous reward term
-            print(f"episode: {self.episode_counter} | action: {np.round(action_pre,3)} | d_goal is: {d_goal:.5f} | dist_rew is: {rew_dist:.5f} | diff_rew is: {rew_diff:.5f}", end = "\r")
-            # print(f"episode: {self.episode_counter} | action_pre: {np.round(action_pre, 3)} | action: {np.round(action, 3)}", end = "\r")
+            # print(f"episode: {self.episode_counter} | action: {np.round(action_pre,3)} | d_goal is: {d_goal:.5f} | dist_rew is: {rew_dist:.5f} | diff_rew is: {rew_diff:.5f}", end = "\r")
+            # print(f"episode: {self.episode_counter} | action_pre: {np.round(action_pre, 5)} | action: {np.round(action_rot, 5)} 
 
         self.d_goal_last = d_goal
         
