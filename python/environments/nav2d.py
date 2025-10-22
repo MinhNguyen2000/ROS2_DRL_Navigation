@@ -28,7 +28,7 @@ class Nav2D(MujocoEnv):
         ''' class constructor to initialize the environment (Mujoco model and data), the observation space, and renderer
         
         Arguments:
-            json_file:              a string that containes the name of the environment parameters json file, which
+            json_file:              a string that contains the name of the environment parameters json file, which
                                     contains compiler info, visual settings, and element settings (ground, wall, light, 
                                     agent, goal)
             frame_skip:             number of frames skipped in the gymnasium MuJoCo renderer
@@ -159,6 +159,10 @@ class Nav2D(MujocoEnv):
         low[[0, 1, 6, 7]] = -(self.size - self.agent_radius)
         high[[0, 1, 6, 7]] = self.size - self.agent_radius
 
+        # set the angular bounds:
+        low[2] = 0.0
+        high[2] = 2*np.pi
+
         self.observation_space = gym.spaces.Box(
             low=low,        # [x_min, y_min, target_x_min, target_y_min]
             high=high,        # [x_max, y_max, target_x_max, target_y_max]
@@ -167,12 +171,13 @@ class Nav2D(MujocoEnv):
     
     def _set_action_space(self):
         ''' internal method to set the bounds on the agent's local x_linear, y_linear and z_angular velocities'''
-        # self.action_low = -np.ones([3, ], dtype=np.float64)
-        # self.action_high = np.ones([3, ], dtype=np.float64)
-        # self.action_low = np.array([-1.0, -0.001, -1.0], dtype=np.float64)
-        # self.action_high = np.array([1.0, 0.001, 1.0], dtype=np.float64)
-        self.action_low = np.array([-1.0, -1.0], dtype=np.float64)
-        self.action_high = np.array([1.0, 1.0], dtype=np.float64)
+        # set the low and high of the action space:
+        self.action_low = np.array([-1.0], dtype=np.float64)
+        self.action_high = np.array([1.0], dtype=np.float64)
+
+        # self.action_low = np.array([-1.0, -1.0], dtype=np.float64)
+        # self.action_high = np.array([1.0, 1.0], dtype=np.float64)
+
         self.action_space = gym.spaces.Box(low=self.action_low, high=self.action_high, dtype=np.float64)
         return self.action_space
     
@@ -316,7 +321,8 @@ class Nav2D(MujocoEnv):
                 3. term (bool):         whether the episode is terminated
         '''
         # 1. move the simulation forward with the TRANSFORMED action (w.r.t. original frame)
-        action_pre = np.array([action[0], 0, action[1]], dtype=np.float64)
+        action_pre = np.array([0, 0, action[0]], dtype=np.float64)
+        # action_pre = np.array([action[0], 0, action[1]], dtype=np.float64)
         action_rot = np.copy(action_pre)
 
         # # clipped action
@@ -360,25 +366,43 @@ class Nav2D(MujocoEnv):
         elif obstacle_cond:
             rew = -100
         else:
-            # penalize based on distance from goal:
+            #- penalize based on distance from goal: -#
             rew_dist = -2 * d_goal
 
-            # penalize moving away from goal, reward moving toward goal:
+            #- penalize moving away from goal, reward moving toward goal: -#
             rew_diff = -1_000 * (d_goal - self.d_goal_last)
 
-            # penalize every timestep agent is not at goal:
+            #- penalize every timestep agent is not at goal: -#
             rew_time = -1
 
+            #- penalize based on difference in desired heading: -#
+            # get the difference in positions:
+            x_diff = goal_pos[0] - agent_pos[0]
+            y_diff = goal_pos[1] - agent_pos[1]
+
+            # find the desired heading to point agent to goal:
+            required_heading = np.arctan2(y_diff, x_diff, dtype = np.float64) % 2*np.pi
+
+            # wrap the current agent position between 0 and 2pi:
+            wrapped_theta = theta % 2*np.pi
+
+            # find the absolute value of the difference in heading:
+            abs_diff = np.abs(required_heading - wrapped_theta)
+
+            # penalize based on this difference:
+            rew_angle = -1 * abs_diff
+
             # total reward term:
-            rew = rew_dist + rew_diff + rew_time
+            rew = rew_angle
+            # rew = rew_dist + rew_diff + rew_time + rew_angle
             # rew = rew_dist + rew_diff + rew_time
             # rew = rew_time
 
-            # TODO - Matt, you can play around with the agent's heading
             #  aligning reward as part of the continuous reward term
             # print(f"episode: {self.episode_counter} | action: {np.round(action_pre,3)} | d_goal is: {d_goal:.5f} | dist_rew is: {rew_dist:.5f} | diff_rew is: {rew_diff:.5f}", end = "\r")
             # print(f"episode: {self.episode_counter} | action_pre: {np.round(action_pre, 5)} | action: {np.round(action_rot, 5)}                 ", end = "\r")
-            print(f"num_goal_rand: {self.goal_rand_counter:3d} | goal_rand_bound: {self.goal_bound:7.5f} | goal_pos: {goal_pos}        ", end="\r")
+            # print(f"num_goal_rand: {self.goal_rand_counter:3d} | goal_rand_bound: {self.goal_bound:7.5f} | goal_pos: {goal_pos}        ", end="\r")
+            print(f"required heading: {required_heading:1f} | current heading: {wrapped_theta:.1f} | abs_diff: {abs_diff:.1f} | rew: {rew:.2f} | action: {np.round(action_rot,2)}                          ", end = "\r")
         self.d_goal_last = d_goal
         
         # 5. info (optional)
