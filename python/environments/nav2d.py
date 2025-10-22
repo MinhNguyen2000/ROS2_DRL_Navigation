@@ -172,11 +172,10 @@ class Nav2D(MujocoEnv):
     def _set_action_space(self):
         ''' internal method to set the bounds on the agent's local x_linear, y_linear and z_angular velocities'''
         # set the low and high of the action space:
-        self.action_low = np.array([-5.0], dtype=np.float64)
-        self.action_high = np.array([5.0], dtype=np.float64)
-
-        # self.action_low = np.array([-1.0, -1.0], dtype=np.float64)
-        # self.action_high = np.array([1.0, 1.0], dtype=np.float64)
+        self.action_low = np.array([-1.0, -1.0], dtype=np.float64)
+        self.action_high = np.array([1.0, 1.0], dtype=np.float64)
+        # self.action_low = np.array([-1.0], dtype=np.float64)
+        # self.action_high = np.array([1.0], dtype=np.float64)
 
         self.action_space = gym.spaces.Box(low=self.action_low, high=self.action_high, dtype=np.float64)
         return self.action_space
@@ -258,6 +257,17 @@ class Nav2D(MujocoEnv):
         goal_pos = ob[6:8]
         self.d_goal_last = self._get_l2_distance(agent_pos, goal_pos)
         return ob
+    
+    def get_heading(self, 
+                    agent_pos: list, 
+                    goal_pos: list):
+        # this function gets the heading based on an agent_pos and a goal_pos
+        diff = goal_pos - agent_pos
+
+        # heading:
+        heading = np.arctan2(diff[1], diff[0], dtype = np.float64) % (2*np.pi)
+
+        return heading
 
     def reset(self,
               seed: int | None = None,
@@ -321,8 +331,8 @@ class Nav2D(MujocoEnv):
                 3. term (bool):         whether the episode is terminated
         '''
         # 1. move the simulation forward with the TRANSFORMED action (w.r.t. original frame)
-        action_pre = np.array([0, 0, action[0]], dtype=np.float64)
-        # action_pre = np.array([action[0], 0, action[1]], dtype=np.float64)
+        # action_pre = np.array([0, 0, action[0]], dtype=np.float64)
+        action_pre = np.array([action[0], 0, action[1]], dtype=np.float64)
         action_rot = np.copy(action_pre)
 
         # # clipped action
@@ -340,7 +350,11 @@ class Nav2D(MujocoEnv):
         # action transformed into global frame
         action_rot[:2] = self.rot_matrix @ action_rot[:2]
 
-        self.data.qvel[0:3] = action_rot
+        # scale the action:
+        action_scale = np.copy(action_rot)
+        action_scale[2] *= 5
+
+        self.data.qvel[0:3] = action_scale
 
         mj.mj_step(self.model, self.data, nstep=self.frame_skip)
 
@@ -358,6 +372,15 @@ class Nav2D(MujocoEnv):
         # when the agent is close to obstacles
         obstacle_cond = min(lidar_obs) < self.obstacle_threshold
 
+        # get the difference in positions:
+        required_heading = self.get_heading(agent_pos, goal_pos) 
+
+        # wrap the current agent position between 0 and 2pi:
+        wrapped_theta = theta % (2*np.pi)
+
+        # find the absolute value of the difference in heading:
+        abs_diff = np.abs(np.abs(required_heading - wrapped_theta) - np.pi)
+        
         term = distance_cond or obstacle_cond
         
         # 4. reward
@@ -367,33 +390,20 @@ class Nav2D(MujocoEnv):
             rew = -100
         else:
             #- penalize based on distance from goal: -#
-            rew_dist = -2 * d_goal
+            rew_dist = -2 * d_goal + 1
 
             #- penalize moving away from goal, reward moving toward goal: -#
-            rew_diff = -1_000 * (d_goal - self.d_goal_last)
+            # rew_diff = -500 * (d_goal - self.d_goal_last)
 
             #- penalize every timestep agent is not at goal: -#
             rew_time = -1
 
             #- penalize based on difference in desired heading: -#
-            # get the difference in positions:
-            x_diff = goal_pos[0] - agent_pos[0]
-            y_diff = goal_pos[1] - agent_pos[1]
-
-            # find the desired heading to point agent to goal:
-            required_heading = np.arctan2(y_diff, x_diff, dtype = np.float64) % (2*np.pi)
-
-            # wrap the current agent position between 0 and 2pi:
-            wrapped_theta = theta % (2*np.pi)
-
-            # find the absolute value of the difference in heading:
-            abs_diff = np.abs(required_heading - wrapped_theta)
-
-            # penalize based on this difference:
-            rew_heading = -1 * abs_diff
+            # reward moving toward heading, penalize moving away:
+            rew_heading = 4.4 * abs_diff - 13.44
 
             # total reward term:
-            rew = rew_heading
+            rew = rew_heading + rew_time + rew_dist
             # rew = rew_dist + rew_diff + rew_time + rew_angle
             # rew = rew_dist + rew_diff + rew_time
             # rew = rew_time
@@ -402,8 +412,12 @@ class Nav2D(MujocoEnv):
             # print(f"episode: {self.episode_counter} | action: {np.round(action_pre,3)} | d_goal is: {d_goal:.5f} | dist_rew is: {rew_dist:.5f} | diff_rew is: {rew_diff:.5f}", end = "\r")
             # print(f"episode: {self.episode_counter} | action_pre: {np.round(action_pre, 5)} | action: {np.round(action_rot, 5)}                 ", end = "\r")
             # print(f"num_goal_rand: {self.goal_rand_counter:3d} | goal_rand_bound: {self.goal_bound:7.5f} | goal_pos: {goal_pos}        ", end="\r")
-            print(f"required: {required_heading*180/np.pi:1f} | current: {wrapped_theta*180/np.pi:.1f} | abs_diff: {abs_diff*180/np.pi:.1f} | rew: {rew:.2f} | action: {np.round(action_rot,2)}                          ", end = "\r")
+            # print(f"current: {wrapped_theta * 180/np.pi:.2f} | desired: {required_heading* 180/np.pi:.2f} | rew_heading: {rew_heading:.2f} | rew_diff: {rew_diff:.2f} | total_rew: {rew:.2f} | action: {np.round(action_scale, 3)}                                        ", end = "\r")
+            # print(f"current: {wrapped_theta * 180/np.pi:.2f} | desired: {required_heading* 180/np.pi:.2f} | rew_heading: {rew_heading:.2f} | rew_diff: {rew_diff:.2f} | rew_dist: {rew_dist:.2f} | total: {rew:.2f}                                       ", end = "\r")
+            print(f"current: {wrapped_theta * 180/np.pi:.2f} | desired: {required_heading* 180/np.pi:.2f} | rew_heading: {rew_heading:.2f} | rew_dist: {rew_dist:.2f} | total: {rew:.2f}                                       ", end = "\r")
         self.d_goal_last = d_goal
+        self.d_goal_last = d_goal
+        # self.last_heading_diff = abs_diff
         
         # 5. info (optional)
         info = {"reward": rew, "dist_cond": distance_cond, "obst_cond": obstacle_cond}
