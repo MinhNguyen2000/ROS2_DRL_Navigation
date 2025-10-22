@@ -122,6 +122,14 @@ class Nav2D(MujocoEnv):
         self.agent_id = self.model.body("agent").id
         self.goal_id = self.model.body("goal").id
 
+        # --- randomization bounds
+        self.agent_bound = self.size - 2*self.agent_radius
+        self.angle_bound = np.pi
+        self.goal_bound_init = self.agent_radius
+        self.goal_bound = self.goal_bound_init
+        self.goal_bound_final = self.size - self.agent_radius
+        self.goal_rand_counter = 0
+
         # --- termination conditions
         self.distance_threshold = 0.05
         self.obstacle_threshold = 0.05 + self.agent_radius
@@ -210,10 +218,6 @@ class Nav2D(MujocoEnv):
         noise_low = -0.1
         noise_high = 0.1
 
-        agent_bound = self.size - 2*self.agent_radius
-        angle_bound = np.pi
-        goal_bound = self.size - self.agent_radius
-
         # get a copy of the initial_qpos
         qpos = np.copy(self.init_qpos)      # initially agent is at [0,0], goal is at [-0.5, -0.5]
         qvel = np.copy(self.init_qvel)
@@ -221,10 +225,10 @@ class Nav2D(MujocoEnv):
         # if it is time to randomize the agent:
         if agent_randomize:
             # randomize the X,Y position of the agent by randomly sampling in a box around the center of the worldbody:
-            qpos[0:2] = self.np_random.uniform(size=2, low=-agent_bound, high=agent_bound)
+            qpos[0:2] = self.np_random.uniform(size=2, low=-self.agent_bound, high=self.agent_bound)
 
             # randomize the pose of the agent by randomly sampling between -pi and pi:
-            qpos[2] += self.np_random.uniform(size=1, low=-angle_bound, high=angle_bound)
+            qpos[2] += self.np_random.uniform(size=1, low=-self.angle_bound, high=self.angle_bound)
 
             # randomize the velocity of the agent:
             qvel[0:2] += self.np_random.uniform(size=2, low=noise_low, high=noise_high)
@@ -235,7 +239,7 @@ class Nav2D(MujocoEnv):
         # if it is time to randomize the goal:
         if goal_randomize:
             # randomize the X,Y position of the goal by randomly sampling in a box around the center of the worldbody:
-            qpos[3:5] = self.np_random.uniform(size=2, low=-goal_bound, high=goal_bound)
+            qpos[3:5] = self.np_random.uniform(size=2, low=-self.goal_bound, high=self.goal_bound)
             self.init_qpos[3:5] = qpos[3:5]
 
         if obstacle_randomize:
@@ -268,6 +272,8 @@ class Nav2D(MujocoEnv):
         if self.episode_counter % self.agent_frequency == 0:
            self.agent_randomize = True
         if self.episode_counter % self.goal_frequency == 0:
+            self.goal_rand_counter += 1
+            self.goal_bound = (self.goal_bound_final-self.goal_bound_init)/2 * (np.tanh(0.16 * self.goal_rand_counter - 3) + 1) + self.goal_bound_init
             self.goal_randomize = True
         if self.episode_counter % self.obstacle_frequency == 0:
             self.obstacle_randomize = True
@@ -372,7 +378,7 @@ class Nav2D(MujocoEnv):
             #  aligning reward as part of the continuous reward term
             # print(f"episode: {self.episode_counter} | action: {np.round(action_pre,3)} | d_goal is: {d_goal:.5f} | dist_rew is: {rew_dist:.5f} | diff_rew is: {rew_diff:.5f}", end = "\r")
             # print(f"episode: {self.episode_counter} | action_pre: {np.round(action_pre, 5)} | action: {np.round(action_rot, 5)}                 ", end = "\r")
-
+            print(f"num_goal_rand: {self.goal_rand_counter:3d} | goal_rand_bound: {self.goal_bound:7.5f} | goal_pos: {goal_pos}        ", end="\r")
         self.d_goal_last = d_goal
         
         # 5. info (optional)
@@ -583,10 +589,6 @@ class Nav2D_Holonomic(MujocoEnv):
         noise_low = -0.1
         noise_high = 0.1
 
-        agent_bound = self.size - 2*self.agent_radius
-        angle_bound = np.pi
-        goal_bound = self.size - self.agent_radius
-
         # get a copy of the initial_qpos
         qpos = np.copy(self.init_qpos)      # initially agent is at [0,0], goal is at [-0.5, -0.5]
         qvel = np.copy(self.init_qvel)
@@ -594,10 +596,10 @@ class Nav2D_Holonomic(MujocoEnv):
         # if it is time to randomize the agent:
         if agent_randomize:
             # randomize the X,Y position of the agent by randomly sampling in a box around the center of the worldbody:
-            qpos[0:2] = self.np_random.uniform(size=2, low=-agent_bound, high=agent_bound)
+            qpos[0:2] = self.np_random.uniform(size=2, low=-self.agent_bound, high=self.agent_bound)
 
             # randomize the pose of the agent by randomly sampling between -pi and pi:
-            qpos[2] += self.np_random.uniform(size=1, low=-angle_bound, high=angle_bound)
+            qpos[2] += self.np_random.uniform(size=1, low=-self.angle_bound, high=self.angle_bound)
 
             # randomize the velocity of the agent:
             qvel[0:2] += self.np_random.uniform(size=2, low=noise_low, high=noise_high)
@@ -608,7 +610,7 @@ class Nav2D_Holonomic(MujocoEnv):
         # if it is time to randomize the goal:
         if goal_randomize:
             # randomize the X,Y position of the goal by randomly sampling in a box around the center of the worldbody:
-            qpos[3:5] = self.np_random.uniform(size=2, low=-goal_bound, high=goal_bound)
+            qpos[3:5] = self.np_random.uniform(size=2, low=-self.goal_bound, high=self.goal_bound)
             self.init_qpos[3:5] = qpos[3:5]
 
         if obstacle_randomize:
