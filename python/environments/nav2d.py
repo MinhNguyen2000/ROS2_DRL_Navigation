@@ -250,7 +250,7 @@ class Nav2D(MujocoEnv):
         
         # increment a counter:
         self.episode_counter += 1
-        print(f"episode is: {self.episode_counter}", end = "\r")
+        # print(f"episode is: {self.episode_counter}", end = "\r")
         
         # call the reset method of the parent class:
         super().reset(seed = seed)
@@ -289,7 +289,7 @@ class Nav2D(MujocoEnv):
         Returns:
             the 2-D Cartesian distance between the two points
         '''
-        return np.sqrt(np.square(point_a[0]-point_b[0]) + np.square(point_a[1]-point_b[1]))
+        return np.linalg.norm(point_a[0:2]-point_b[0:2])
 
     def step(self, action):
         ''' method to execute one simulation step given the velocity command to the agent
@@ -311,8 +311,14 @@ class Nav2D(MujocoEnv):
         # # clipped action
         # action = np.clip(action, a_min = self.action_low, a_max = self.action_high)
         theta = self._get_obs()[2]
-        self.rot_matrix = np.array([[np.cos(theta), -np.sin(theta)],
-                                    [np.sin(theta), np.cos(theta)]], dtype=np.float64)
+
+        # Update rotation matrix in-place
+        cos_theta = np.cos(theta)
+        sin_theta = np.sin(theta)
+        self.rot_matrix[0, 0] = cos_theta
+        self.rot_matrix[0, 1] = -sin_theta
+        self.rot_matrix[1, 0] = sin_theta
+        self.rot_matrix[1, 1] = cos_theta
         
         # action transformed into global frame
         action_rot[:2] = self.rot_matrix @ action_rot[:2]
