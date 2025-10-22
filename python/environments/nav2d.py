@@ -23,7 +23,7 @@ class Nav2D(MujocoEnv):
                  height: int = 480,
                  camera_id: int | None = None,
                  camera_name: str | None = None,
-                 visual_options: dict[int, bool] = {},
+                 visual_options: dict[int, bool] | None = None,
                 ):
         ''' class constructor to initialize the environment (Mujoco model and data), the observation space, and renderer
         
@@ -95,19 +95,25 @@ class Nav2D(MujocoEnv):
                 int(np.round(1.0 / self.dt)) == self.metadata["render_fps"]
             ), f'Expected value: {int(np.round(1.0 / self.dt))}, Actual value: {self.metadata["render_fps"]}'
 
+        # Delay creating the heavy renderer object until it's actually needed.
+        # Avoid mutable default args by normalizing visual_options here.
         from gymnasium.envs.mujoco.mujoco_rendering import MujocoRenderer
 
-        self.mujoco_renderer = MujocoRenderer(
-            self.model,
-            self.data,
-            default_cam_config = default_camera_config,
-            width           = self.width,
-            height          = self.height,
-            max_geom        = 1000,
-            camera_id       = self.camera_id,
-            camera_name     = self.camera_name,
-            visual_options  = visual_options,
-        )
+        self._visual_options = {} if visual_options is None else visual_options
+        self.mujoco_renderer = None
+        if self.render_mode is not None:
+            # Only instantiate the renderer if rendering was requested.
+            self.mujoco_renderer = MujocoRenderer(
+                self.model,
+                self.data,
+                default_cam_config = default_camera_config,
+                width           = self.width,
+                height          = self.height,
+                max_geom        = 1000,
+                camera_id       = self.camera_id,
+                camera_name     = self.camera_name,
+                visual_options  = self._visual_options,
+            )
 
         self.window = None
         self.clock = None
@@ -365,7 +371,7 @@ class Nav2D(MujocoEnv):
             # TODO - Matt, you can play around with the agent's heading
             #  aligning reward as part of the continuous reward term
             # print(f"episode: {self.episode_counter} | action: {np.round(action_pre,3)} | d_goal is: {d_goal:.5f} | dist_rew is: {rew_dist:.5f} | diff_rew is: {rew_diff:.5f}", end = "\r")
-            print(f"episode: {self.episode_counter} | action_pre: {np.round(action_pre, 5)} | action: {np.round(action_rot, 5)}                 ", end = "\r")
+            # print(f"episode: {self.episode_counter} | action_pre: {np.round(action_pre, 5)} | action: {np.round(action_rot, 5)}                 ", end = "\r")
 
         self.d_goal_last = d_goal
         
@@ -390,7 +396,7 @@ class Nav2D_Holonomic(MujocoEnv):
                  height: int = 480,
                  camera_id: int | None = None,
                  camera_name: str | None = None,
-                 visual_options: dict[int, bool] = {},
+                 visual_options: dict[int, bool] | None = None,
                 ):
         ''' class constructor to initialize the environment (Mujoco model and data), the observation space, and renderer
         
@@ -462,19 +468,25 @@ class Nav2D_Holonomic(MujocoEnv):
                 int(np.round(1.0 / self.dt)) == self.metadata["render_fps"]
             ), f'Expected value: {int(np.round(1.0 / self.dt))}, Actual value: {self.metadata["render_fps"]}'
 
+        # Delay creating the heavy renderer object until it's actually needed.
+        # Avoid mutable default args by normalizing visual_options here.
         from gymnasium.envs.mujoco.mujoco_rendering import MujocoRenderer
 
-        self.mujoco_renderer = MujocoRenderer(
-            self.model,
-            self.data,
-            default_cam_config = default_camera_config,
-            width           = self.width,
-            height          = self.height,
-            max_geom        = 1000,
-            camera_id       = self.camera_id,
-            camera_name     = self.camera_name,
-            visual_options  = visual_options,
-        )
+        self._visual_options = {} if visual_options is None else visual_options
+        self.mujoco_renderer = None
+        if self.render_mode is not None:
+            # Only instantiate the renderer if rendering was requested.
+            self.mujoco_renderer = MujocoRenderer(
+                self.model,
+                self.data,
+                default_cam_config = default_camera_config,
+                width           = self.width,
+                height          = self.height,
+                max_geom        = 1000,
+                camera_id       = self.camera_id,
+                camera_name     = self.camera_name,
+                visual_options  = self._visual_options,
+            )
 
         self.window = None
         self.clock = None
@@ -709,10 +721,10 @@ class Nav2D_Holonomic(MujocoEnv):
             rew = -100
         else:
             # penalize based on distance from goal:
-            rew_dist = -2 * d_goal
+            rew_dist = - d_goal
 
             # penalize moving away from goal, reward moving toward goal:
-            rew_diff = -1_000 * (d_goal - self.d_goal_last)
+            rew_diff = -200 * (d_goal - self.d_goal_last)
 
             # penalize every timestep agent is not at goal:
             rew_time = -1
