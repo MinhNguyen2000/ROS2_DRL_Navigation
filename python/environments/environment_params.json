@@ -9,7 +9,7 @@
 
     "option_settings" : {
         "timestep"      : 0.001,
-        "integrator"    : 2,
+        "integrator"    : 1,
         "gravity"       : [0, 0, -9.81]
     },
 
