@@ -65,6 +65,9 @@ class Nav2D(MujocoEnv):
             params = json.load(f)
         self.size = params["ground_settings"]["internal_length"]
         self.agent_radius = params["agent_settings"]["radius"]
+
+        scaled_inner_length = 2 * (self.size - self.agent_radius)
+        self.dmax = np.sqrt(2 * scaled_inner_length ** 2, dtype = np.float64)
         
         # --- define the uninitialized location of the agent and the target
         self._agent_loc = np.array([0, 0], dtype=np.float64)
@@ -142,18 +145,13 @@ class Nav2D(MujocoEnv):
             (3, ): agent's x, y, z joint velocities
             (2, ): goal's x + y body positions, where x and y are bounded by the arena size
             (n_rays, ): LiDAR scans'''
-        # TODO - handle the extra half LiDAR ray to remove the +1 at the end
+        # define the obs_space_size:
         obs_space_size = 3 + 3 + 2 + self.n_rays
 
         # set the scale on the observation space:
-        # for an agent in the lower permissible area and a task in the upper permissible area, the largest LiDAR reading, and subsequent observation,
-        # would be this value:
-        obs_scale_length = 2* (self.size - self.agent_radius)
-        obs_scale = np.sqrt(2 * obs_scale_length ** 2, dtype = np.float64)
-        
         # initialize the bounds as [-1, +1] scaled by some amount:
-        low = -np.ones((obs_space_size,),dtype=np.float64) * obs_scale
-        high = np.ones((obs_space_size,),dtype=np.float64) * obs_scale
+        low = -np.ones((obs_space_size,),dtype=np.float64) * self.dmax
+        high = np.ones((obs_space_size,),dtype=np.float64) * self.dmax
         
         # set the x-y bounds of the agent and goal as half the arena size
         low[[0, 1, 6, 7]] = -(self.size - self.agent_radius)
@@ -275,7 +273,6 @@ class Nav2D(MujocoEnv):
         
         # increment a counter:
         self.episode_counter += 1
-        # print(f"episode is: {self.episode_counter}", end = "\r")
         
         # call the reset method of the parent class:
         super().reset(seed = seed)
@@ -293,6 +290,7 @@ class Nav2D(MujocoEnv):
         if self.episode_counter % self.obstacle_frequency == 0:
             self.obstacle_randomize = True
 
+        # reset mujoco model:
         ob = self.reset_model(self.agent_randomize, self.goal_randomize, self.obstacle_randomize)
         info = {}
 
@@ -335,8 +333,7 @@ class Nav2D(MujocoEnv):
         action_pre = np.array([action[0], 0, action[1]], dtype=np.float64)
         action_rot = np.copy(action_pre)
 
-        # # clipped action
-        # action = np.clip(action, a_min = self.action_low, a_max = self.action_high)
+        # get angle:
         theta = self._get_obs()[2]
 
         # Update rotation matrix in-place
@@ -347,7 +344,7 @@ class Nav2D(MujocoEnv):
         self.rot_matrix[1, 0] = sin_theta
         self.rot_matrix[1, 1] = cos_theta
         
-        # action transformed into global frame
+        # action transformed into global frame:
         action_rot[:2] = self.rot_matrix @ action_rot[:2]
 
         # scale the action:
@@ -356,6 +353,7 @@ class Nav2D(MujocoEnv):
 
         self.data.qvel[0:3] = action_scale
 
+        # step the mujoco model:
         mj.mj_step(self.model, self.data, nstep=self.frame_skip)
 
         # 2. collect the new observation (LiDAR simulation, location of agent/goal using the custom _get_obs())\
@@ -365,11 +363,12 @@ class Nav2D(MujocoEnv):
         goal_pos = nobs[6:8]
         lidar_obs = nobs[8:]
 
-        # 3. termination condition 
-        # when the agent is close to the goal
+        # 3. termination condition: 
+        # when the agent is close to the goal:
         d_goal = self._get_l2_distance(agent_pos, goal_pos)
         distance_cond = d_goal < self.distance_threshold
-        # when the agent is close to obstacles
+
+        # when the agent is close to obstacles:
         obstacle_cond = min(lidar_obs) < self.obstacle_threshold
 
         # get the difference in positions:
@@ -379,7 +378,7 @@ class Nav2D(MujocoEnv):
         wrapped_theta = theta % (2*np.pi)
 
         # find the absolute value of the difference in heading:
-        abs_diff = np.abs(np.abs(required_heading - wrapped_theta) - np.pi)
+        abs_diff = np.abs((required_heading - wrapped_theta + np.pi) % (2 * np.pi) - np.pi)
         
         term = distance_cond or obstacle_cond
         
@@ -389,40 +388,37 @@ class Nav2D(MujocoEnv):
         elif obstacle_cond:
             rew = -100
         else:
-            #- penalize based on distance from goal: -#
-            rew_dist = -2 * d_goal + 1
+            #--- penalize based on the absolute difference in heading:
+            rew_head = -(1/np.pi) * abs_diff
 
-            #- penalize moving away from goal, reward moving toward goal: -#
-            # rew_diff = -500 * (d_goal - self.d_goal_last)
+            #--- penalize for every timestep not at the goal:
+            rew_time = -0.25
 
-            #- penalize every timestep agent is not at goal: -#
-            rew_time = -1
+            #--- penalize based on distance from the goal:
+            rew_dist = -(d_goal / self.dmax)
 
-            #- penalize based on difference in desired heading: -#
-            # reward moving toward heading, penalize moving away:
-            rew_heading = 4.4 * abs_diff - 13.44
+            #--- penalize moving before being aligned:
+            if abs_diff * (180/np.pi) > 5:
+                rew_align = -1.0
+            else:
+                rew_align = 0
 
-            # total reward term:
-            rew = rew_heading + rew_time + rew_dist
-            # rew = rew_dist + rew_diff + rew_time + rew_angle
-            # rew = rew_dist + rew_diff + rew_time
-            # rew = rew_time
+            #--- increasingly penalize moving away from the goal, reward moving toward:
+            rew_approach = -500 * (d_goal - self.d_goal_last) / self.dmax
 
-            #  aligning reward as part of the continuous reward term
-            # print(f"episode: {self.episode_counter} | action: {np.round(action_pre,3)} | d_goal is: {d_goal:.5f} | dist_rew is: {rew_dist:.5f} | diff_rew is: {rew_diff:.5f}", end = "\r")
-            # print(f"episode: {self.episode_counter} | action_pre: {np.round(action_pre, 5)} | action: {np.round(action_rot, 5)}                 ", end = "\r")
-            # print(f"num_goal_rand: {self.goal_rand_counter:3d} | goal_rand_bound: {self.goal_bound:7.5f} | goal_pos: {goal_pos}        ", end="\r")
-            # print(f"current: {wrapped_theta * 180/np.pi:.2f} | desired: {required_heading* 180/np.pi:.2f} | rew_heading: {rew_heading:.2f} | rew_diff: {rew_diff:.2f} | total_rew: {rew:.2f} | action: {np.round(action_scale, 3)}                                        ", end = "\r")
-            # print(f"current: {wrapped_theta * 180/np.pi:.2f} | desired: {required_heading* 180/np.pi:.2f} | rew_heading: {rew_heading:.2f} | rew_diff: {rew_diff:.2f} | rew_dist: {rew_dist:.2f} | total: {rew:.2f}                                       ", end = "\r")
-            # print(f"current: {wrapped_theta * 180/np.pi:.2f} | desired: {required_heading* 180/np.pi:.2f} | rew_heading: {rew_heading:.2f} | rew_dist: {rew_dist:.2f} | total: {rew:.2f}                                       ", end = "\r")
+            #--- total reward term:
+            rew = rew_head + rew_time + rew_dist + rew_align + rew_approach
+
+            # print to user:
+            print(f"required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {rew_head:.2f} | rew_dist: {rew_dist:.2f} | rew_align: {rew_align:.2f} | rew_approach: {rew_approach:.5f} | total: {rew:.2f}                                             ", end = "\r")
+
+        # advance d_goal history:
         self.d_goal_last = d_goal
-        self.d_goal_last = d_goal
-        # self.last_heading_diff = abs_diff
         
-        # 5. info (optional)
+        # 5. info (optional):
         info = {"reward": rew, "dist_cond": distance_cond, "obst_cond": obstacle_cond}
         
-        # 6. render if render_mode human 
+        # 6. render if render_mode human:
         if self.render_mode == "human":
             self.render()
 
