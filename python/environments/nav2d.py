@@ -140,10 +140,10 @@ class Nav2D(MujocoEnv):
         Order of the bounds
             (3, ): agents's x, y, z joint positions, where x and y are bounded by the arena size
             (3, ): agent's x, y, z joint velocities
-            (3, ): goal's x, y, z body positions, where x and y are bounded by the arena size
+            (2, ): goal's x + y body positions, where x and y are bounded by the arena size
             (n_rays, ): LiDAR scans'''
         # TODO - handle the extra half LiDAR ray to remove the +1 at the end
-        obs_space_size = 3 + 3 + 3 + self.n_rays + 1
+        obs_space_size = 3 + 3 + 2 + self.n_rays
 
         # set the scale on the observation space:
         # for an agent in the lower permissible area and a task in the upper permissible area, the largest LiDAR reading, and subsequent observation,
@@ -206,11 +206,11 @@ class Nav2D(MujocoEnv):
             self.data.qvel[0:3]     # Local velocities w.r.t the joints
             ]).ravel()
 
-        # Grab the current location of the goal
-        goal_obs = self.data.xpos[self.goal_id]
+        # Grab the current x-y location of the goal
+        goal_obs = self.data.xpos[self.goal_id][:2]
 
-        # Grab the lidar sensor values
-        lidar_obs = self.data.sensordata
+        # Grab the lidar sensor values (exclude the extra last scan)
+        lidar_obs = self.data.sensordata[:-1]
 
         ob = np.concat((agent_obs, goal_obs, lidar_obs), dtype=np.float64)
         return ob
@@ -414,7 +414,7 @@ class Nav2D(MujocoEnv):
             # print(f"num_goal_rand: {self.goal_rand_counter:3d} | goal_rand_bound: {self.goal_bound:7.5f} | goal_pos: {goal_pos}        ", end="\r")
             # print(f"current: {wrapped_theta * 180/np.pi:.2f} | desired: {required_heading* 180/np.pi:.2f} | rew_heading: {rew_heading:.2f} | rew_diff: {rew_diff:.2f} | total_rew: {rew:.2f} | action: {np.round(action_scale, 3)}                                        ", end = "\r")
             # print(f"current: {wrapped_theta * 180/np.pi:.2f} | desired: {required_heading* 180/np.pi:.2f} | rew_heading: {rew_heading:.2f} | rew_diff: {rew_diff:.2f} | rew_dist: {rew_dist:.2f} | total: {rew:.2f}                                       ", end = "\r")
-            print(f"current: {wrapped_theta * 180/np.pi:.2f} | desired: {required_heading* 180/np.pi:.2f} | rew_heading: {rew_heading:.2f} | rew_dist: {rew_dist:.2f} | total: {rew:.2f}                                       ", end = "\r")
+            # print(f"current: {wrapped_theta * 180/np.pi:.2f} | desired: {required_heading* 180/np.pi:.2f} | rew_heading: {rew_heading:.2f} | rew_dist: {rew_dist:.2f} | total: {rew:.2f}                                       ", end = "\r")
         self.d_goal_last = d_goal
         self.d_goal_last = d_goal
         # self.last_heading_diff = abs_diff
