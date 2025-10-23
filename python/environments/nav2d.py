@@ -104,7 +104,7 @@ class Nav2D(MujocoEnv):
 
         self._visual_options = {} if visual_options is None else visual_options
         self.mujoco_renderer = None
-        if self.render_mode is not None:
+        if self.render_mode == "human":
             # Only instantiate the renderer if rendering was requested.
             self.mujoco_renderer = MujocoRenderer(
                 self.model,
@@ -404,14 +404,14 @@ class Nav2D(MujocoEnv):
                 rew_align = 0
 
             #--- increasingly penalize moving away from the goal, reward moving toward:
-            rew_approach = -500 * (d_goal - self.d_goal_last) / self.dmax
+            rew_approach = -500 * (d_goal - self.d_goal_last)
 
             #--- total reward term:
             rew = rew_head + rew_time + rew_dist + rew_align + rew_approach
 
             # print to user:
-            print(f"required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {rew_head:.2f} | rew_dist: {rew_dist:.2f} | rew_align: {rew_align:.2f} | rew_approach: {rew_approach:.5f} | total: {rew:.2f}                                             ", end = "\r")
-
+            print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {rew_head:.2f} | rew_dist: {rew_dist:.2f} | rew_align: {rew_align:.2f} | rew_approach: {rew_approach:.5f} | total: {rew:.2f}                                             ", end = "\r")
+            # print(f"difference in goal pos: {(d_goal - self.d_goal_last):.4f} | reward from that: {rew_approach:.4f}              ", end = "\r")
         # advance d_goal history:
         self.d_goal_last = d_goal
         
