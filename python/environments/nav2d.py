@@ -124,7 +124,7 @@ class Nav2D(MujocoEnv):
 
         # --- randomization bounds
         self.agent_bound = self.size - 2*self.agent_radius
-        self.angle_bound = np.pi
+        self.angle_bound = 2*np.pi
         self.goal_bound_init = self.agent_radius
         self.goal_bound = self.goal_bound_init
         self.goal_bound_final = self.size - self.agent_radius
@@ -231,11 +231,11 @@ class Nav2D(MujocoEnv):
             # randomize the X,Y position of the agent by randomly sampling in a box around the center of the worldbody:
             qpos[0:2] = self.np_random.uniform(size=2, low=-self.agent_bound, high=self.agent_bound)
 
-            # randomize the pose of the agent by randomly sampling between -pi and pi:
-            qpos[2] += self.np_random.uniform(size=1, low=-self.angle_bound, high=self.angle_bound)
+            # randomize the pose of the agent by randomly sampling between 0 and 2*pi:
+            qpos[2] = self.np_random.uniform(size=1, low=0, high=self.angle_bound)
 
             # randomize the velocity of the agent:
-            qvel[0:2] += self.np_random.uniform(size=2, low=noise_low, high=noise_high)
+            qvel[0:2] = self.np_random.uniform(size=2, low=noise_low, high=noise_high)
 
             self.init_qpos[0:3] = qpos[0:3]
             self.init_qvel[0:2] = qvel[0:2]
@@ -363,7 +363,7 @@ class Nav2D(MujocoEnv):
         # TODO - How can I make this more robust to future changes
         agent_pos = nobs[0:2]
         goal_pos = nobs[6:8]
-        lidar_obs = nobs[9:]
+        lidar_obs = nobs[8:]
 
         # 3. termination condition 
         # when the agent is close to the goal
