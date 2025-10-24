@@ -52,8 +52,8 @@ class Nav2D(MujocoEnv):
         self.n_rays = 36
 
         self.episode_counter = 0
-        self.agent_frequency = 1
-        self.goal_frequency = 10
+        self.agent_frequency = 5
+        self.goal_frequency = 5
         self.obstacle_frequency = 25
 
         self.agent_randomize = False
