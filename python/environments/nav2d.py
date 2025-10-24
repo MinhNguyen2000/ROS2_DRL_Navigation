@@ -23,6 +23,7 @@ class Nav2D(MujocoEnv):
                  height: int = 480,
                  camera_id: int | None = None,
                  camera_name: str | None = None,
+                 reward_scale_options: dict[str, float] | None = None,
                  visual_options: dict[int, bool] | None = None,
                 ):
         ''' class constructor to initialize the environment (Mujoco model and data), the observation space, and renderer
@@ -137,6 +138,10 @@ class Nav2D(MujocoEnv):
         # --- termination conditions
         self.distance_threshold = 0.05
         self.obstacle_threshold = 0.05 + self.agent_radius
+
+        # --- scale of each reward
+        self.rew_head_scale = reward_scale_options.get("rew_head_scale", 1) if reward_scale_options else 1
+        self.rew_dist_scale = reward_scale_options.get("rew_dist_scale", 1) if reward_scale_options else 1
 
     def _set_observation_space(self):
         ''' internal method to set the bounds on the observation space
@@ -410,12 +415,12 @@ class Nav2D(MujocoEnv):
             #--- total reward term:
             # rew = rew_head + rew_time + rew_dist + rew_align + rew_approach
             # rew = 2*rew_head + rew_time + rew_dist + rew_approach
-            rew = 2*rew_head + rew_time + rew_dist
+            rew = self.rew_head_scale*rew_head + rew_time + self.rew_dist_scale*rew_dist
 
             # print to user:
             # print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {rew_head:.2f} | rew_dist: {rew_dist:.2f} | rew_align: {rew_align:.2f} | rew_approach: {rew_approach:.5f} | total: {rew:.2f}                                             ", end = "\r")
             # print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {rew_head:.2f} | rew_dist: {rew_dist:.2f} | rew_approach: {rew_approach:.5f} | total: {rew:.2f}                                             ", end = "\r")
-            print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {rew_head:.2f} | rew_dist: {rew_dist:.2f} | total: {rew:.2f}                                             ", end = "\r")
+            # print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {rew_head:.2f} | rew_dist: {rew_dist:.2f} | total: {rew:.2f}                                             ", end = "\r")
         # advance d_goal history:
         self.d_goal_last = d_goal
         
