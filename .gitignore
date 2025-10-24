@@ -55,3 +55,6 @@ CATKIN_IGNORE
 
 # testing file:
 testing.py
+
+# results for training:
+results/
