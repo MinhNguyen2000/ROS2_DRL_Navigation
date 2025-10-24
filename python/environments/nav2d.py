@@ -357,7 +357,7 @@ class Nav2D(MujocoEnv):
 
         # scale the action:
         action_scale = np.copy(action_rot)
-        action_scale[2] *= 5
+        action_scale[2] *= 2
 
         self.data.qvel[0:3] = action_scale
 
