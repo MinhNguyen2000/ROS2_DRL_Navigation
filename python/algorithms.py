@@ -583,7 +583,7 @@ class TD3():
                 # --- reset/advance
                 eps += 1
                 if self.rand_goal_freq and eps % self.rand_goal_freq == 0:
-                    obs = self.env.reset(agent_randomize=False, goal_randomize=True)[0]
+                    obs = self.env.reset(options={"goal_randomize": True})[0]
                 else:
                     obs = self.env.reset()[0]
                 eps_step_count = 0
