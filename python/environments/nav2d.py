@@ -295,11 +295,11 @@ class Nav2D(MujocoEnv):
         # check randomize conditions:
         if self.episode_counter % self.agent_frequency == 0:
            self.agent_rand_counter += 1
-           self.agent_bound = (self.agent_bound_final-self.agent_bound_init)/2 * (np.tanh(0.05 * self.agent_rand_counter - 2) + 1) + self.agent_bound_init
+           self.agent_bound = (self.agent_bound_final-self.agent_bound_init)/2 * (np.tanh((self.agent_frequency/100) * self.agent_rand_counter - 2) + 1) + self.agent_bound_init
            self.agent_randomize = True
         if self.episode_counter % self.goal_frequency == 0:
             self.goal_rand_counter += 1
-            self.goal_bound = (self.goal_bound_final-self.goal_bound_init)/2 * (np.tanh(0.16 * self.goal_rand_counter - 3) + 1) + self.goal_bound_init
+            self.goal_bound = (self.goal_bound_final-self.goal_bound_init)/2 * (np.tanh((self.goal_frequency/100) * self.goal_rand_counter - 3) + 1) + self.goal_bound_init
             self.goal_randomize = True
         if self.episode_counter % self.obstacle_frequency == 0:
             self.obstacle_randomize = True
