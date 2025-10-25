@@ -128,7 +128,11 @@ class Nav2D(MujocoEnv):
         self.goal_id = self.model.body("goal").id
 
         # --- randomization bounds
-        self.agent_bound = self.size - 2*self.agent_radius
+        self.agent_bound_init = self.agent_radius
+        self.agent_bound = self.agent_bound_init
+        self.agent_bound_final = self.size - 2*self.agent_radius
+        self.agent_rand_counter = 0
+
         self.angle_bound = 2*np.pi
         self.goal_bound_init = self.agent_radius
         self.goal_bound = self.goal_bound_init
@@ -290,6 +294,8 @@ class Nav2D(MujocoEnv):
 
         # check randomize conditions:
         if self.episode_counter % self.agent_frequency == 0:
+           self.agent_rand_counter += 1
+           self.agent_bound = (self.agent_bound_final-self.agent_bound_init)/2 * (np.tanh(0.05 * self.agent_rand_counter - 2) + 1) + self.agent_bound_init
            self.agent_randomize = True
         if self.episode_counter % self.goal_frequency == 0:
             self.goal_rand_counter += 1
@@ -422,7 +428,7 @@ class Nav2D(MujocoEnv):
             # print to user:
             # print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {rew_head:.2f} | rew_dist: {rew_dist:.2f} | rew_align: {rew_align:.2f} | rew_approach: {rew_approach:.5f} | total: {rew:.2f}                                             ", end = "\r")
             # print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {rew_head:.2f} | rew_dist: {rew_dist:.2f} | rew_approach: {rew_approach:.5f} | total: {rew:.2f}                                             ", end = "\r")
-            print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | rew_dist: {self.rew_dist_scale * rew_dist:.2f} | total: {rew:.2f}                                             ", end = "\r")
+            # print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | rew_dist: {self.rew_dist_scale * rew_dist:.2f} | total: {rew:.2f}                                             ", end = "\r")
         # advance d_goal history:
         self.d_goal_last = d_goal
         
