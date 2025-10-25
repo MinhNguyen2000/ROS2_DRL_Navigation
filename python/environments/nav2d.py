@@ -25,6 +25,7 @@ class Nav2D(MujocoEnv):
                  camera_name: str | None = None,
                  reward_scale_options: dict[str, float] | None = None,
                  visual_options: dict[int, bool] | None = None,
+                 is_eval: bool = False
                 ):
         ''' class constructor to initialize the environment (Mujoco model and data), the observation space, and renderer
         
@@ -148,6 +149,9 @@ class Nav2D(MujocoEnv):
         self.rew_dist_scale = reward_scale_options.get("rew_dist_scale", 1) if reward_scale_options else 1
         self.rew_goal_scale = reward_scale_options.get("rew_goal_scale", 1) if reward_scale_options else 200
         self.rew_obst_scale = reward_scale_options.get("rew_obst_scale", 1) if reward_scale_options else -100
+
+        # --- whether an evaluation environment or not
+        self.is_eval = is_eval
 
     def _set_observation_space(self):
         ''' internal method to set the bounds on the observation space
@@ -293,19 +297,28 @@ class Nav2D(MujocoEnv):
         mj.mj_resetData(self.model, self.data)
 
         # check randomize conditions:
-        if self.episode_counter % self.agent_frequency == 0:
-           self.agent_rand_counter += 1
-           self.agent_bound = (self.agent_bound_final-self.agent_bound_init)/2 * (np.tanh((self.agent_frequency/100) * self.agent_rand_counter - 2) + 1) + self.agent_bound_init
-           self.agent_randomize = True
-        if self.episode_counter % self.goal_frequency == 0:
-            self.goal_rand_counter += 1
-            self.goal_bound = (self.goal_bound_final-self.goal_bound_init)/2 * (np.tanh((self.goal_frequency/100) * self.goal_rand_counter - 3) + 1) + self.goal_bound_init
-            self.goal_randomize = True
-        if self.episode_counter % self.obstacle_frequency == 0:
-            self.obstacle_randomize = True
+        if not self.is_eval:
+            if self.episode_counter % self.agent_frequency == 0:
+                self.agent_rand_counter += 1
+                self.agent_bound = (self.agent_bound_final-self.agent_bound_init)/2 * (np.tanh((self.agent_frequency/100) * self.agent_rand_counter - 2) + 1) + self.agent_bound_init
+                self.agent_randomize = True
+            if self.episode_counter % self.goal_frequency == 0:
+                self.goal_rand_counter += 1
+                self.goal_bound = (self.goal_bound_final-self.goal_bound_init)/2 * (np.tanh((self.goal_frequency/100) * self.goal_rand_counter - 3) + 1) + self.goal_bound_init
+                self.goal_randomize = True
+            if self.episode_counter % self.obstacle_frequency == 0:
+                self.obstacle_randomize = True
 
-        # reset mujoco model:
-        ob = self.reset_model(self.agent_randomize, self.goal_randomize, self.obstacle_randomize)
+            # reset mujoco model:
+            ob = self.reset_model(self.agent_randomize, self.goal_randomize, self.obstacle_randomize)
+        
+        else: # if an evaluation env, always reset and with the largest bound possible
+            self.agent_bound = self.agent_bound_final
+            self.goal_bound = self.goal_bound_final
+            ob = self.reset_model(agent_randomize=True,
+                                  goal_randomize=True,
+                                  obstacle_randomize=True)
+
         info = {}
 
         # reset flags:
