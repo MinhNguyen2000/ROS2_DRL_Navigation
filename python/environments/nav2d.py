@@ -53,7 +53,7 @@ class Nav2D(MujocoEnv):
         self.n_rays = 36
 
         self.episode_counter = 0
-        self.agent_frequency = 5
+        self.agent_frequency = 1
         self.goal_frequency = 5
         self.obstacle_frequency = 25
 
@@ -441,7 +441,8 @@ class Nav2D(MujocoEnv):
             # print to user:
             # print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {rew_head:.2f} | rew_dist: {rew_dist:.2f} | rew_align: {rew_align:.2f} | rew_approach: {rew_approach:.5f} | total: {rew:.2f}                                             ", end = "\r")
             # print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {rew_head:.2f} | rew_dist: {rew_dist:.2f} | rew_approach: {rew_approach:.5f} | total: {rew:.2f}                                             ", end = "\r")
-            # print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | rew_dist: {self.rew_dist_scale * rew_dist:.2f} | total: {rew:.2f}                                             ", end = "\r")
+            if not self.is_eval:
+                print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | rew_dist: {self.rew_dist_scale * rew_dist:.2f} | total: {rew:.2f}                                             ", end = "\r")
         # advance d_goal history:
         self.d_goal_last = d_goal
         
