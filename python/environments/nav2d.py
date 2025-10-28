@@ -50,7 +50,7 @@ class Nav2D(MujocoEnv):
         self.camera_name = camera_name
         self.camera_id = camera_id
         self.frame_skip = frame_skip
-        self.n_rays = 36
+        self.n_rays = 8
 
         self.episode_counter = 0
         self.agent_frequency = 5
@@ -383,7 +383,7 @@ class Nav2D(MujocoEnv):
         # self.rot_matrix[1, 0] = sin_theta
         # self.rot_matrix[1, 1] = cos_theta
         
-        # # action transformed into global frame:
+        # action transformed into global frame:
         # action_rot[:2] = self.rot_matrix @ action_rot[:2]
         action_rot[0] = cos_theta * action_pre[0] - sin_theta * action_pre[1]
         action_rot[1] = sin_theta * action_pre[0] + cos_theta * action_pre[1]
@@ -391,7 +391,7 @@ class Nav2D(MujocoEnv):
         # # scale the action:
         # action_scale = np.copy(action_rot)
         # action_scale[2] *= 5
-        action_rot[2] = action_pre[0] * 2
+        action_rot[2] = action_pre[2] * 2
 
         self.data.qvel[0:3] = action_rot
 
@@ -427,6 +427,7 @@ class Nav2D(MujocoEnv):
         
         term = distance_cond or obstacle_cond
         
+        info = {}
         # 4. reward
         if distance_cond:
             rew = self.rew_goal_scale
@@ -462,15 +463,16 @@ class Nav2D(MujocoEnv):
             rew = self.rew_head_scale * rew_head + self.rew_dist_scale * rew_approach + rew_time
 
             # print to user:
-            if not self.is_eval:
-                # print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | rew_dist: {self.rew_dist_scale * rew_dist:.2f} | total: {rew:.2f}                                             ", end = "\r")
-                print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | rew_approach: {self.rew_dist_scale * rew_approach:.5f} | total: {rew:.2f}                                             ", end = "\r")
+            # if not self.is_eval:
+            #     # print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | rew_dist: {self.rew_dist_scale * rew_dist:.2f} | total: {rew:.2f}                                             ", end = "\r")
+            #     print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | rew_approach: {self.rew_dist_scale * rew_approach:.5f} | total: {rew:.2f}                                             ", end = "\r")
+            info = {"rew_approach": self.rew_dist_scale * rew_approach, "rew_head": self.rew_head_scale * rew_head}
         # advance d_goal history:
         self.d_goal_last = d_goal
         
         # 5. info (optional):
         # info = {"reward": rew, "dist_cond": distance_cond, "obst_cond": obstacle_cond}
-        info = {}
+        # info = {}
         
         # 6. render if render_mode human:
         if self.render_mode == "human":
