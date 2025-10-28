@@ -53,7 +53,7 @@ class Nav2D(MujocoEnv):
         self.n_rays = 8
 
         self.episode_counter = 0
-        self.agent_frequency = 5
+        self.agent_frequency = 1
         self.goal_frequency = 5
         self.obstacle_frequency = 25
 
@@ -364,7 +364,7 @@ class Nav2D(MujocoEnv):
         action_rot[1] = sin_theta * action_pre[0] + cos_theta * action_pre[1]
 
         # scale the action as necessary:
-        action_rot[2] = action_pre[2] * 5
+        action_rot[2] = action_pre[2] * 3
 
         self.data.qvel[0:3] = action_rot
 
