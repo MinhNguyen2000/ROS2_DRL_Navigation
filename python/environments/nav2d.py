@@ -214,23 +214,6 @@ class Nav2D(MujocoEnv):
 
                 3. ``lidar_obs``:  a np.ndarray with the LiDAR reading(s)
         '''
-        
-        # # Grab the current pose of the robot
-        # agent_pos= self.data.xpos[self.agent_id][:2]                                    
-        # agent_heading = np.array(self.data.qpos[2], dtype = np.float32).reshape(1)     
-        # agent_obs = np.concatenate([
-        #     agent_pos,              # Global coordinates (x_world, y_world)
-        #     agent_heading,          # Local coordinate heading
-        #     self.data.qvel[0:3]     # Local velocities w.r.t the joints
-        #     ]).ravel()
-
-        # # Grab the current x-y location of the goal
-        # goal_obs = self.data.xpos[self.goal_id][:2]
-
-        # # Grab the lidar sensor values (exclude the extra last scan)
-        # lidar_obs = self.data.sensordata[:-1]
-
-        # ob = np.concat((agent_obs, goal_obs, lidar_obs), dtype=np.float32)
 
         #--- modify obs buffer inplace instead of concatenation overhead (time + memory)
         self._obs_buffer[0:2] = self.data.xpos[self.agent_id][:2]
@@ -372,26 +355,16 @@ class Nav2D(MujocoEnv):
         action_rot = np.copy(action_pre)
 
         # get angle:
-        # theta = self._get_obs()[2]  
         theta = self.data.qpos[2]   # theoretically faster than a function call
 
-        # Update rotation matrix in-place
+        # action transformed into global frame:
         cos_theta = np.cos(theta)
         sin_theta = np.sin(theta)
-        # self.rot_matrix[0, 0] = cos_theta
-        # self.rot_matrix[0, 1] = -sin_theta
-        # self.rot_matrix[1, 0] = sin_theta
-        # self.rot_matrix[1, 1] = cos_theta
-        
-        # action transformed into global frame:
-        # action_rot[:2] = self.rot_matrix @ action_rot[:2]
         action_rot[0] = cos_theta * action_pre[0] - sin_theta * action_pre[1]
         action_rot[1] = sin_theta * action_pre[0] + cos_theta * action_pre[1]
 
-        # # scale the action:
-        # action_scale = np.copy(action_rot)
-        # action_scale[2] *= 5
-        action_rot[2] = action_pre[2] * 2
+        # scale the action as necessary:
+        action_rot[2] = action_pre[2] * 5
 
         self.data.qvel[0:3] = action_rot
 
@@ -436,13 +409,14 @@ class Nav2D(MujocoEnv):
         else:
             #--- penalize based on the absolute difference in heading:
             # rew_head = -(1/np.pi) * abs_diff
-            rew_head = 1.0 - (abs_diff / np.pi)     # should be in [0, 1]
+            # rew_head = 1.0 - (abs_diff / np.pi)     # should be in [0, 1]
+            rew_head = 1.0 - np.tanh(abs_diff)
 
             #--- penalize for every timestep not at the goal:
             rew_time = -0.01    # going to keep this very small relative to the reward scale
 
             #--- reward for approach:
-            rew_approach = (self.d_goal_last - d_goal)
+            rew_approach = max((self.d_goal_last - d_goal), 0)
 
             #--- penalize based on distance from the goal:
             # rew_dist = -(d_goal / self.dmax)
@@ -463,9 +437,9 @@ class Nav2D(MujocoEnv):
             rew = self.rew_head_scale * rew_head + self.rew_dist_scale * rew_approach + rew_time
 
             # print to user:
-            # if not self.is_eval:
-            #     # print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | rew_dist: {self.rew_dist_scale * rew_dist:.2f} | total: {rew:.2f}                                             ", end = "\r")
-            #     print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | rew_approach: {self.rew_dist_scale * rew_approach:.5f} | total: {rew:.2f}                                             ", end = "\r")
+            if not self.is_eval:
+                # print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | rew_dist: {self.rew_dist_scale * rew_dist:.2f} | total: {rew:.2f}                                             ", end = "\r")
+                print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | rew_approach: {self.rew_dist_scale * rew_approach:.5f} | total: {rew:.2f}                                             ", end = "\r")
             info = {"rew_approach": self.rew_dist_scale * rew_approach, "rew_head": self.rew_head_scale * rew_head}
         # advance d_goal history:
         self.d_goal_last = d_goal
