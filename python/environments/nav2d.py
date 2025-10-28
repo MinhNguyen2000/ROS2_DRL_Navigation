@@ -100,6 +100,9 @@ class Nav2D(MujocoEnv):
         # --- define the observation space
         self._set_observation_space()
         
+        #--- pre allocate observation array once
+        self._obs_buffer = np.zeros(self._obs_space_size, dtype = np.float32)
+        
         # --- define the action space
         self._set_action_space()
 
@@ -163,12 +166,12 @@ class Nav2D(MujocoEnv):
             (2, ): goal's x + y body positions, where x and y are bounded by the arena size
             (n_rays, ): LiDAR scans'''
         # define the obs_space_size:
-        obs_space_size = 3 + 3 + 2 + self.n_rays
+        self._obs_space_size = 3 + 3 + 2 + self.n_rays
 
         # set the scale on the observation space:
         # initialize the bounds as [-1, +1] scaled by some amount:
-        low = -np.ones((obs_space_size,),dtype=np.float32) * self.dmax
-        high = np.ones((obs_space_size,),dtype=np.float32) * self.dmax
+        low = -np.ones((self._obs_space_size,),dtype=np.float32) * self.dmax
+        high = np.ones((self._obs_space_size,),dtype=np.float32) * self.dmax
         
         # set the x-y bounds of the agent and goal as half the arena size
         low[[0, 1, 6, 7]] = -(self.size - self.agent_radius)
@@ -212,23 +215,30 @@ class Nav2D(MujocoEnv):
                 3. ``lidar_obs``:  a np.ndarray with the LiDAR reading(s)
         '''
         
-        # Grab the current pose of the robot
-        agent_pos= self.data.xpos[self.agent_id][:2]                                    
-        agent_heading = np.array(self.data.qpos[2], dtype = np.float32).reshape(1)     
-        agent_obs = np.concatenate([
-            agent_pos,              # Global coordinates (x_world, y_world)
-            agent_heading,          # Local coordinate heading
-            self.data.qvel[0:3]     # Local velocities w.r.t the joints
-            ]).ravel()
+        # # Grab the current pose of the robot
+        # agent_pos= self.data.xpos[self.agent_id][:2]                                    
+        # agent_heading = np.array(self.data.qpos[2], dtype = np.float32).reshape(1)     
+        # agent_obs = np.concatenate([
+        #     agent_pos,              # Global coordinates (x_world, y_world)
+        #     agent_heading,          # Local coordinate heading
+        #     self.data.qvel[0:3]     # Local velocities w.r.t the joints
+        #     ]).ravel()
 
-        # Grab the current x-y location of the goal
-        goal_obs = self.data.xpos[self.goal_id][:2]
+        # # Grab the current x-y location of the goal
+        # goal_obs = self.data.xpos[self.goal_id][:2]
 
-        # Grab the lidar sensor values (exclude the extra last scan)
-        lidar_obs = self.data.sensordata[:-1]
+        # # Grab the lidar sensor values (exclude the extra last scan)
+        # lidar_obs = self.data.sensordata[:-1]
 
-        ob = np.concatenate((agent_obs, goal_obs, lidar_obs), dtype=np.float32)
-        return ob
+        # ob = np.concat((agent_obs, goal_obs, lidar_obs), dtype=np.float32)
+
+        #--- modify obs buffer inplace instead of concatenation overhead (time + memory)
+        self._obs_buffer[0:2] = self.data.xpos[self.agent_id][:2]
+        self._obs_buffer[2] = self.data.qpos[2]
+        self._obs_buffer[3:6] = self.data.qvel[0:3]
+        self._obs_buffer[6:8] = self.data.xpos[self.goal_id][:2]
+        self._obs_buffer[8:] = self.data.sensordata[:-1]
+        return self._obs_buffer
     
     def reset_model(self, 
                     agent_randomize: bool = False, 
@@ -362,24 +372,28 @@ class Nav2D(MujocoEnv):
         action_rot = np.copy(action_pre)
 
         # get angle:
-        theta = self._get_obs()[2]
+        # theta = self._get_obs()[2]  
+        theta = self.data.qpos[2]   # theoretically faster than a function call
 
         # Update rotation matrix in-place
         cos_theta = np.cos(theta)
         sin_theta = np.sin(theta)
-        self.rot_matrix[0, 0] = cos_theta
-        self.rot_matrix[0, 1] = -sin_theta
-        self.rot_matrix[1, 0] = sin_theta
-        self.rot_matrix[1, 1] = cos_theta
+        # self.rot_matrix[0, 0] = cos_theta
+        # self.rot_matrix[0, 1] = -sin_theta
+        # self.rot_matrix[1, 0] = sin_theta
+        # self.rot_matrix[1, 1] = cos_theta
         
-        # action transformed into global frame:
-        action_rot[:2] = self.rot_matrix @ action_rot[:2]
+        # # action transformed into global frame:
+        # action_rot[:2] = self.rot_matrix @ action_rot[:2]
+        action_rot[0] = cos_theta * action_pre[0] - sin_theta * action_pre[1]
+        action_rot[1] = sin_theta * action_pre[0] + cos_theta * action_pre[1]
 
-        # scale the action:
-        action_scale = np.copy(action_rot)
-        action_scale[2] *= 5
+        # # scale the action:
+        # action_scale = np.copy(action_rot)
+        # action_scale[2] *= 5
+        action_rot[2] = action_pre[0] * 2
 
-        self.data.qvel[0:3] = action_scale
+        self.data.qvel[0:3] = action_rot
 
         # step the mujoco model:
         mj.mj_step(self.model, self.data, nstep=self.frame_skip)
@@ -455,7 +469,8 @@ class Nav2D(MujocoEnv):
         self.d_goal_last = d_goal
         
         # 5. info (optional):
-        info = {"reward": rew, "dist_cond": distance_cond, "obst_cond": obstacle_cond}
+        # info = {"reward": rew, "dist_cond": distance_cond, "obst_cond": obstacle_cond}
+        info = {}
         
         # 6. render if render_mode human:
         if self.render_mode == "human":
