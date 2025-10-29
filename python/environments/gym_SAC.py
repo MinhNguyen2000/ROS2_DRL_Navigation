@@ -18,6 +18,11 @@ import os, json
 from datetime import datetime
 from tqdm import tqdm
 
+# Ignore User Warnings (for creating a new folder to save policies):
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
+
 def main():
     # define reward scaling:
     reward_scale = {
