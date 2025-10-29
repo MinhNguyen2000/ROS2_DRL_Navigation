@@ -414,33 +414,20 @@ class Nav2D(MujocoEnv):
             rew = self.rew_obst_scale
         else:
             #--- penalize based on the absolute difference in heading:
-            # rew_head = -(1/np.pi) * abs_diff
-            # rew_head = 1.0 - (abs_diff / np.pi)     # should be in [0, 1]
             rew_head = 1.0 - np.tanh(abs_diff)
 
             #--- reward for moving in direction of correct heading:
-            # delta_heading = self.prev_abs_diff - abs_diff
-            # rew_head_approach = np.clip(delta_heading, 0.0, 1.0)
-
             rew_head_approach = max((self.prev_abs_diff - abs_diff), 0)
+
+            #--- bonus reward for being within +/- 5 degree of the desired trajectory:
+            if (abs_diff) * (180/np.pi) <= 5.0:
+                rew_head_head += 2
 
             #--- penalize for every timestep not at the goal:
             rew_time = -0.01    # going to keep this very small relative to the reward scale
 
             #--- reward for approach:
             rew_approach = max((self.d_goal_last - d_goal), 0)
-
-            #--- penalize based on distance from the goal:
-            # rew_dist = -(d_goal / self.dmax)
-
-            #--- penalize moving before being aligned:
-            # if abs_diff * (180/np.pi) > 5:
-            #     rew_align = -1.0
-            # else:
-            #     rew_align = 0
-
-            # # --- increasingly penalize moving away from the goal, reward moving toward:
-            # rew_approach = np.tanh(100 * (self.d_goal_last - d_goal)) * 0.5 - 0.5
 
             #--- total reward term:
             # rew = rew_head + rew_time + rew_dist + rew_align + rew_approach
@@ -451,12 +438,10 @@ class Nav2D(MujocoEnv):
 
             # print to user:
             if not self.is_eval:
-                # print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | rew_dist: {self.rew_dist_scale * rew_dist:.2f} | total: {rew:.2f}                                             ", end = "\r")
-                # print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | rew_approach: {self.rew_dist_scale * rew_approach:.5f} | total: {rew:.2f}                                             ", end = "\r")
-                # print(f"ep: {self.episode_counter} | action: {action_rot[2]:.3f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | total: {rew:.2f}                                             ", end = "\r")
-                # print(f"ep: {self.episode_counter} | delta: {delta_heading*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head_approach: {rew_head_approach*5.0:.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | total: {rew:.2f}                                             ", end = "\r")
-                print(f"delta heading is: {self.prev_abs_diff - abs_diff} | heading approach reward is: {self.rew_head_approach_scale * rew_head_approach:.3f}", end = "\r")
+                print(f"episode: {self.episode_counter}                                                                                     ", end = "\r")
+                # print(f"delta heading is: {self.prev_abs_diff - abs_diff} | heading approach reward is: {self.rew_head_approach_scale * rew_head_approach:.3f}", end = "\r")
             info = {"rew_approach": self.rew_dist_scale * rew_approach, "rew_head": self.rew_head_scale * rew_head}
+
         # advance d_goal history:
         self.d_goal_last = d_goal
         self.prev_abs_diff = abs_diff
