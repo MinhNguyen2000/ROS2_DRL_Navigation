@@ -420,7 +420,7 @@ class Nav2D(MujocoEnv):
             rew_head_approach = max((self.prev_abs_diff - abs_diff), 0)
 
             #--- bonus reward for being within +/- 5 degree of the desired trajectory:
-            if (abs_diff) * (180/np.pi) <= 5.0:
+            if (abs_diff) * (180/np.pi) <= 2.5:
                 rew_head_head += 2
 
             #--- penalize for every timestep not at the goal:
