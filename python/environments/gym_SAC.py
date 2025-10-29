@@ -27,7 +27,7 @@ def main():
     # define reward scaling:
     reward_scale = {
         "rew_head_scale" : 5.0,
-        "rew_head_approach_scale" : 100.0,
+        "rew_head_approach_scale" : 200.0,
         "rew_dist_scale" : 1000.0,
         "rew_goal_scale" : 2000.0,
         "rew_obst_scale" : -1000.0
@@ -80,9 +80,9 @@ def main():
                 device = "cuda" if gpu else "cpu")
 
     # training parameters:
-    number_of_runs = 100
+    number_of_runs = 500
     steps_per_run = 20_000
-    model_save_freq = int(number_of_runs / 20)
+    model_save_freq = max(int(number_of_runs / 20), 1)
 
     # model saving parameters:
     dir_path = os.path.dirname(os.path.abspath(__file__))
