@@ -151,6 +151,7 @@ class Nav2D(MujocoEnv):
 
         # --- scale of each reward
         self.rew_head_scale = reward_scale_options.get("rew_head_scale", 1) if reward_scale_options else 1
+        self.rew_head_approach_scale = reward_scale_options.get("rew_head_approach_scale", 1) if reward_scale_options else 100
         self.rew_dist_scale = reward_scale_options.get("rew_dist_scale", 1) if reward_scale_options else 1
         self.rew_goal_scale = reward_scale_options.get("rew_goal_scale", 1) if reward_scale_options else 200
         self.rew_obst_scale = reward_scale_options.get("rew_obst_scale", 1) if reward_scale_options else -100
@@ -446,7 +447,7 @@ class Nav2D(MujocoEnv):
             # rew = 2*rew_head + rew_time + rew_dist + rew_approach
             # rew = self.rew_head_scale*rew_head + rew_time + self.rew_dist_scale*rew_dist
             # rew = self.rew_head_scale * rew_head + self.rew_dist_scale * rew_approach + rew_time
-            rew = self.rew_head_scale * rew_head + rew_time + 100 * rew_head_approach
+            rew = self.rew_head_scale * rew_head + rew_time + self.rew_head_approach_scale * rew_head_approach
 
             # print to user:
             if not self.is_eval:
@@ -454,7 +455,7 @@ class Nav2D(MujocoEnv):
                 # print(f"ep: {self.episode_counter} | required: {required_heading*(180/np.pi):.2f} | current: {wrapped_theta*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | rew_approach: {self.rew_dist_scale * rew_approach:.5f} | total: {rew:.2f}                                             ", end = "\r")
                 # print(f"ep: {self.episode_counter} | action: {action_rot[2]:.3f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | total: {rew:.2f}                                             ", end = "\r")
                 # print(f"ep: {self.episode_counter} | delta: {delta_heading*(180/np.pi):.2f} | diff: {abs_diff*(180/np.pi):.2f} | rew_head_approach: {rew_head_approach*5.0:.2f} | rew_head: {self.rew_head_scale * rew_head:.2f} | total: {rew:.2f}                                             ", end = "\r")
-                print(f"delta heading is: {self.prev_abs_diff - abs_diff} | heading approach reward is: {100 * rew_head_approach:.3f}", end = "\r")
+                print(f"delta heading is: {self.prev_abs_diff - abs_diff} | heading approach reward is: {self.rew_head_approach_scale * rew_head_approach:.3f}", end = "\r")
             info = {"rew_approach": self.rew_dist_scale * rew_approach, "rew_head": self.rew_head_scale * rew_head}
         # advance d_goal history:
         self.d_goal_last = d_goal
