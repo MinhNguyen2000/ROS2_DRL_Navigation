@@ -8,7 +8,7 @@ import mujoco as mj
 from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.envs.registration import register
 
-import json
+import os, json
 from model_creation import MakeEnv
 
 class Nav2D(MujocoEnv):
@@ -62,8 +62,9 @@ class Nav2D(MujocoEnv):
         self.obstacle_randomize = False
 
         # --- load the simulation parameters
-        # TODO - handle full path expansion of json file
-        with open(json_file) as f:
+        dir_path = os.path.dirname(os.path.abspath(__file__))
+        json_path = os.path.join(dir_path,json_file)
+        with open(json_path) as f:
             params = json.load(f)
         self.size = params["ground_settings"]["internal_length"]
         self.agent_radius = params["agent_settings"]["radius"]
