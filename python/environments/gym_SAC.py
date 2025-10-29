@@ -28,6 +28,7 @@ def main():
     reward_scale = {
         "rew_head_scale" : 5.0,
         "rew_head_approach_scale" : 100.0,
+        "rew_dist_scale" : 1000.0,
         "rew_goal_scale" : 2000.0,
         "rew_obst_scale" : -1000.0
     }
@@ -41,20 +42,20 @@ def main():
                         env_kwargs = {"max_episode_steps" : 1000,
                                      "reward_scale_options" : reward_scale},
                         vec_env_cls = SubprocVecEnv,
-                        vec_env_kwargs = dict(start_method = 'forkserver'))
+                        vec_env_kwargs = dict(start_method = 'spawn'))
     
     # model hyperparameters:
     policy = "MlpPolicy"
     gamma = 0.99
     learning_rate = 3e-4
     buffer_size = int(1e6)
-    batch_size = 256
+    batch_size = 2048
     tau = 5e-3
     ent_coef = "auto_0.1"
     train_freq = 1
     learning_starts = int(0)
     target_update_interval = 1
-    gradient_steps = 4
+    gradient_steps = 1
     target_entropy = "auto"
     action_noise = None
     verbose = 0
