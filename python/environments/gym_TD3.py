@@ -21,6 +21,11 @@ import os, re, json, time
 from datetime import datetime
 from tqdm import tqdm
 
+# Ignore User Warnings (for creating a new folder to save policies)
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
+
 def main():
     reward_scale= {
         "rew_head_scale": 5.0,
@@ -31,23 +36,33 @@ def main():
 
     # Environment vectorization
     n_envs = 4
-    n_proc = 2
+    n_proc = 24
+    dummy_env = False
 
     # Create the vectorized environments
-    print("Making subprocess vectorized environments!")
-    env = make_vec_env("Nav2D-v0", 
-                        n_envs=n_proc, 
+    if dummy_env:
+        print("Making dummy vectorized environments!")
+        env = make_vec_env("Nav2D-v0", 
+                        n_envs=n_envs,
                         env_kwargs={"max_episode_steps": 1_000,
                                     "reward_scale_options": reward_scale
                                     },
-                        vec_env_cls=SubprocVecEnv, 
-                        vec_env_kwargs=dict(start_method='forkserver'))
+                        vec_env_cls=DummyVecEnv)
+    else:
+        print("Making subprocess vectorized environments!")
+        env = make_vec_env("Nav2D-v0", 
+                            n_envs=n_proc, 
+                            env_kwargs={"max_episode_steps": 1_000,
+                                        "reward_scale_options": reward_scale
+                                        },
+                            vec_env_cls=SubprocVecEnv, 
+                            vec_env_kwargs=dict(start_method='forkserver'))
 
     # Hyperparameters
     learning_rate = 3e-4
     buffer_size=int(1e6)
     learning_starts=10_000
-    batch_size=2048 
+    batch_size=4096 
     tau=5e-3
     gamma=0.99
     train_freq=1
@@ -58,8 +73,9 @@ def main():
     target_policy_noise=0.1
     target_noise_clip=0.2
     verbose=0
-    tensor_board_log_dir="./results/Nav2D_TD3_SB3_tensorboard/"
-
+    dir_path = os.path.dirname(os.path.abspath(__file__))
+    tensor_board_log_dir=os.path.join(dir_path,"results","Nav2D_TD3_SB3_tensorboard")
+    print(tensor_board_log_dir)
     pi_arch = [256, 256]
     qf_arch = [256, 256]
     policy_kwargs=dict(activation_fn=torch.nn.ReLU,
@@ -94,13 +110,12 @@ def main():
     model_save_freq = int(number_of_runs / 20)
 
     # model saving parameters:
-    dir_path = os.path.dirname(os.path.abspath(__file__))
     base_path = os.path.join(dir_path, "results", "Nav2D_TD3_SB3_results")
     result_number = f"result_{len(os.listdir(base_path)):05d}"
     results_path = os.path.join(base_path, result_number)
 
     # using model.learn approach:
-    for run in tqdm(range(1,number_of_runs+1), ncols = 100, colour = "#33FF00", desc = "training progress"):
+    for run in tqdm(range(1,number_of_runs+1), ncols = 100, colour = "#33FF00", desc = f"{result_number} training progress"):
         # learn every run:
         model.learn(total_timesteps = steps_per_run, tb_log_name=f"{result_number}",reset_num_timesteps = False)
         # model.learn(total_timesteps = steps_per_run, reset_num_timesteps = False)
