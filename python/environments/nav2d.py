@@ -421,7 +421,7 @@ class Nav2D(MujocoEnv):
 
             #--- bonus reward for being within +/- 5 degree of the desired trajectory:
             if (abs_diff) * (180/np.pi) <= 2.5:
-                rew_head_head += 2
+                rew_head += 0.25
 
             #--- penalize for every timestep not at the goal:
             rew_time = -0.01    # going to keep this very small relative to the reward scale
@@ -437,8 +437,7 @@ class Nav2D(MujocoEnv):
             rew = self.rew_head_scale * rew_head + rew_time + self.rew_head_approach_scale * rew_head_approach
 
             # print to user:
-            if not self.is_eval:
-                print(f"episode: {self.episode_counter}                                                                                     ", end = "\r")
+            # if not self.is_eval:
                 # print(f"delta heading is: {self.prev_abs_diff - abs_diff} | heading approach reward is: {self.rew_head_approach_scale * rew_head_approach:.3f}", end = "\r")
             info = {"rew_approach": self.rew_dist_scale * rew_approach, "rew_head": self.rew_head_scale * rew_head}
 
