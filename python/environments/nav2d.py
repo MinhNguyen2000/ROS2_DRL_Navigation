@@ -414,14 +414,14 @@ class Nav2D(MujocoEnv):
             rew = self.rew_obst_scale
         else:
             #--- penalize based on the absolute difference in heading:
-            rew_head = 1.0 - np.tanh(abs_diff)
+            rew_head = 1.0 - np.tanh(2*abs_diff) - 0.2
 
             #--- reward for moving in direction of correct heading:
             rew_head_approach = max((self.prev_abs_diff - abs_diff), 0)
 
             #--- bonus reward for being within +/- 5 degree of the desired trajectory:
-            if (abs_diff) * (180/np.pi) <= 2.5:
-                rew_head += 0.25
+            if (abs_diff) * (180/np.pi) <= 1.25:
+                rew_head += self.rew_head_scale
 
             #--- penalize for every timestep not at the goal:
             rew_time = -0.01    # going to keep this very small relative to the reward scale
