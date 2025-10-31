@@ -37,7 +37,7 @@ def main():
     n_proc = 16
 
     # episode steps:
-    max_episode_steps = 1000
+    max_episode_steps = 2500
 
     # create the vectorized environments:
     env = make_vec_env("Nav2D-v0", 
@@ -51,7 +51,7 @@ def main():
     policy = "MlpPolicy"
     gamma = 0.99
     learning_rate = 3e-4
-    buffer_size = int(1e6)
+    buffer_size = int(2.5e6)
     batch_size = 2048
     tau = 5e-3
     ent_coef = "auto_0.1"
@@ -84,7 +84,7 @@ def main():
 
     # training parameters:
     number_of_runs = 250
-    steps_per_run = 20_000
+    steps_per_run = 50000
     model_save_freq = max(int(number_of_runs / 10), 1)
 
     # model saving parameters:
