@@ -108,6 +108,7 @@ class Nav2D(MujocoEnv):
         self._set_action_space()
 
         self.init_qpos = self.data.qpos.ravel().copy()
+        self.agent_init = np.zeros(3)
         self.init_qvel = self.data.qvel.ravel().copy()
 
         # --- initialize the renderer
@@ -155,6 +156,10 @@ class Nav2D(MujocoEnv):
         self.rew_dist_scale = reward_scale_options.get("rew_dist_scale", 1) if reward_scale_options else 1
         self.rew_goal_scale = reward_scale_options.get("rew_goal_scale", 1) if reward_scale_options else 200
         self.rew_obst_scale = reward_scale_options.get("rew_obst_scale", 1) if reward_scale_options else -100
+
+        # --- intialize reward components
+        self.rew_head_scaled = 0
+        self.rew_head_approach_scaled = 0
 
         # --- whether an evaluation environment or not
         self.is_eval = is_eval
@@ -248,6 +253,7 @@ class Nav2D(MujocoEnv):
             qvel[0:2] = self.np_random.uniform(size=2, low=noise_low, high=noise_high)
 
             self.init_qpos[0:3] = qpos[0:3]
+            self.agent_init = qpos[0:3]
             self.init_qvel[0:2] = qvel[0:2]
 
         # if it is time to randomize the goal:
@@ -295,6 +301,11 @@ class Nav2D(MujocoEnv):
 
         # reset model data:
         mj.mj_resetData(self.model, self.data)
+        
+        # Log the information from this run before reset
+        info = {"agent_init": self.agent_init,
+                "rew_head": self.rew_head_scaled, 
+                "rew_head_approach": self.rew_head_approach_scaled}
 
         # check randomize conditions:
         if not self.is_eval:
@@ -319,7 +330,6 @@ class Nav2D(MujocoEnv):
                                   goal_randomize=True,
                                   obstacle_randomize=True)
 
-        info = {}
 
         # reset flags:
         self.agent_randomize = False
@@ -418,10 +428,12 @@ class Nav2D(MujocoEnv):
 
             #--- reward for moving in direction of correct heading:
             rew_head_approach = max((self.prev_abs_diff - abs_diff), 0)
+            self.rew_head_approach_scaled = self.rew_head_approach_scale * rew_head_approach
 
             #--- bonus reward for being within +/- 5 degree of the desired trajectory:
             if (abs_diff) * (180/np.pi) <= 1.25:
                 rew_head += self.rew_head_scale
+            self.rew_head_scaled = self.rew_head_scale * rew_head
 
             #--- penalize for every timestep not at the goal:
             rew_time = -0.01    # going to keep this very small relative to the reward scale
@@ -434,11 +446,12 @@ class Nav2D(MujocoEnv):
             # rew = 2*rew_head + rew_time + rew_dist + rew_approach
             # rew = self.rew_head_scale*rew_head + rew_time + self.rew_dist_scale*rew_dist
             # rew = self.rew_head_scale * rew_head + self.rew_dist_scale * rew_approach + rew_time
-            rew = self.rew_head_scale * rew_head + rew_time + self.rew_head_approach_scale * rew_head_approach
+            rew = self.rew_head_scaled + rew_time + self.rew_head_approach_scaled
 
             # print to user:
             # if not self.is_eval:
-                # print(f"delta heading is: {self.prev_abs_diff - abs_diff} | heading approach reward is: {self.rew_head_approach_scale * rew_head_approach:.3f}", end = "\r")
+            #     print(f" @ episode {self.episode_counter: 3d} | abs_diff (deg): {abs_diff/np.pi*180: 6.4f} | head_rew: {self.rew_head_scaled: 6.4f} | d_head: {(self.prev_abs_diff - abs_diff): 6.4f} | head_approach_rew: {self.rew_head_approach_scaled:.3f}                                 ", end = "\r")
+            # print(f" @ episode {self.episode_counter}                                                                               ", end="\r")
             info = {"rew_approach": self.rew_dist_scale * rew_approach, "rew_head": self.rew_head_scale * rew_head}
 
         # advance d_goal history:
