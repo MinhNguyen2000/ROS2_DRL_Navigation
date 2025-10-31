@@ -27,7 +27,7 @@ def main():
     # define reward scaling:
     reward_scale = {
         "rew_head_scale" : 5.0,
-        "rew_head_approach_scale" : 200.0,
+        "rew_head_approach_scale" : 250.0,
         "rew_dist_scale" : 1000.0,
         "rew_goal_scale" : 2000.0,
         "rew_obst_scale" : -1000.0
@@ -36,10 +36,13 @@ def main():
     # environment vectorization settings:
     n_proc = 16
 
+    # episode steps:
+    max_episode_steps = 1000
+
     # create the vectorized environments:
     env = make_vec_env("Nav2D-v0", 
                         n_envs = n_proc,
-                        env_kwargs = {"max_episode_steps" : 1000,
+                        env_kwargs = {"max_episode_steps" : max_episode_steps,
                                      "reward_scale_options" : reward_scale},
                         vec_env_cls = SubprocVecEnv,
                         vec_env_kwargs = dict(start_method = 'spawn'))
@@ -80,9 +83,9 @@ def main():
                 device = "cuda" if gpu else "cpu")
 
     # training parameters:
-    number_of_runs = 500
+    number_of_runs = 250
     steps_per_run = 20_000
-    model_save_freq = max(int(number_of_runs / 20), 1)
+    model_save_freq = max(int(number_of_runs / 10), 1)
 
     # model saving parameters:
     dir_path = os.path.dirname(os.path.abspath(__file__))
