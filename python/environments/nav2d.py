@@ -431,9 +431,10 @@ class Nav2D(MujocoEnv):
             self.rew_head_approach_scaled = self.rew_head_approach_scale * rew_head_approach
 
             #--- bonus reward for being within +/- 5 degree of the desired trajectory:
-            angle_threshold = 1.25
-            if (abs_diff) * (180/np.pi) <= angle_threshold:
-                rew_head += self.rew_head_scale - self.rew_head_scale / angle_threshold * abs_diff
+            angle_threshold = 1.25 
+            angle_threshold_rad = angle_threshold / 180 * np.pi
+            if abs_diff <= angle_threshold_rad:
+                rew_head += self.rew_head_scale - self.rew_head_scale / angle_threshold_rad * abs_diff
             self.rew_head_scaled = self.rew_head_scale * rew_head
 
             #--- penalize for every timestep not at the goal:
