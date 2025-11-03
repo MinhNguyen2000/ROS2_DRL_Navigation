@@ -311,11 +311,11 @@ class Nav2D(MujocoEnv):
         if not self.is_eval:
             if self.episode_counter % self.agent_frequency == 0:
                 self.agent_rand_counter += 1
-                self.agent_bound = (self.agent_bound_final-self.agent_bound_init)/2 * (np.tanh((self.agent_frequency/50) * self.agent_rand_counter - 2) + 1) + self.agent_bound_init
+                self.agent_bound = (self.agent_bound_final-self.agent_bound_init)/2 * (np.tanh((self.agent_frequency/250) * self.agent_rand_counter - 2) + 1) + self.agent_bound_init
                 self.agent_randomize = True
             if self.episode_counter % self.goal_frequency == 0:
                 self.goal_rand_counter += 1
-                self.goal_bound = (self.goal_bound_final-self.goal_bound_init)/2 * (np.tanh((self.goal_frequency/50) * self.goal_rand_counter - 3) + 1) + self.goal_bound_init
+                self.goal_bound = (self.goal_bound_final-self.goal_bound_init)/2 * (np.tanh((self.goal_frequency/250) * self.goal_rand_counter - 3) + 1) + self.goal_bound_init
                 self.goal_randomize = True
             if self.episode_counter % self.obstacle_frequency == 0:
                 self.obstacle_randomize = True
@@ -424,7 +424,7 @@ class Nav2D(MujocoEnv):
             rew = self.rew_obst_scale
         else:
             #--- penalize based on the absolute difference in heading:
-            rew_head = 1.0 - np.tanh(2*abs_diff) - 0.2
+            rew_head = 1.0 - np.tanh(2*abs_diff)
 
             #--- reward for moving in direction of correct heading:
             rew_head_approach = max((self.prev_abs_diff - abs_diff), 0)
@@ -437,7 +437,7 @@ class Nav2D(MujocoEnv):
             self.rew_head_scaled = self.rew_head_scale * rew_head
 
             #--- penalize for every timestep not at the goal:
-            rew_time = -0.01    # going to keep this very small relative to the reward scale
+            rew_time = -0.05    # going to keep this very small relative to the reward scale
 
             #--- reward for approach:
             rew_approach = max((self.d_goal_last - d_goal), 0)
