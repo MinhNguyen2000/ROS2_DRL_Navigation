@@ -197,10 +197,10 @@ class Nav2D(MujocoEnv):
     def _set_action_space(self):
         ''' internal method to set the bounds on the agent's local x_linear, y_linear and z_angular velocities'''
         # set the low and high of the action space:
-        # self.action_low = np.array([0, -1.0], dtype=np.float32)
-        # self.action_high = np.array([1.0, 1.0], dtype=np.float32)
-        self.action_low = np.array([-1.0], dtype=np.float32)
-        self.action_high = np.array([1.0], dtype=np.float32)
+        self.action_low = np.array([0, -1.0], dtype=np.float32)
+        self.action_high = np.array([1.0, 1.0], dtype=np.float32)
+        # self.action_low = np.array([-1.0], dtype=np.float32)
+        # self.action_high = np.array([1.0], dtype=np.float32)
 
         self.action_space = gym.spaces.Box(low=self.action_low, high=self.action_high, dtype=np.float32)
         return self.action_space
@@ -366,8 +366,8 @@ class Nav2D(MujocoEnv):
                 3. term (bool):         whether the episode is terminated
         '''
         # 1. move the simulation forward with the TRANSFORMED action (w.r.t. original frame)
-        action_pre = np.array([0, 0, action[0]], dtype=np.float32)
-        # action_pre = np.array([action[0], 0, action[1]], dtype=np.float32)
+        # action_pre = np.array([0, 0, action[0]], dtype=np.float32)
+        action_pre = np.array([action[0], 0, action[1]], dtype=np.float32)
         action_rot = np.copy(action_pre)
 
         # get angle:
