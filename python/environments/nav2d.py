@@ -437,15 +437,16 @@ class Nav2D(MujocoEnv):
             rew = self.rew_obst_scale
         else:
             #--- penalize based on the absolute difference in heading:
-            rew_head = 1.0 - np.tanh(2*abs_diff)
+            rew_head = 1.0 - np.tanh(10*abs_diff)
 
             #--- reward for moving in direction of correct heading:
-            rew_head_approach = max((self.prev_abs_diff - abs_diff), 0)
-            self.rew_head_approach_scaled = self.rew_head_approach_scale * rew_head_approach
+            # rew_head_approach = max((self.prev_abs_diff - abs_diff), 0)
+            # self.rew_head_approach_scaled = self.rew_head_approach_scale * rew_head_approach
 
-            #--- bonus reward for being within +/- 5 degree of the desired trajectory:
+            #--- bonus reward for being within +/- 2.5 degree of the desired trajectory:
             angle_threshold = 1.25 
             angle_threshold_rad = angle_threshold / 180 * np.pi
+
             if abs_diff <= angle_threshold_rad:
                 rew_head += 1 - 1 / angle_threshold_rad * abs_diff
             self.rew_head_scaled = self.rew_head_scale * rew_head
@@ -462,13 +463,15 @@ class Nav2D(MujocoEnv):
             # rew = 2*rew_head + rew_time + rew_dist + rew_approach
             # rew = self.rew_head_scale*rew_head + rew_time + self.rew_dist_scale*rew_dist
             # rew = self.rew_head_scale * rew_head + self.rew_dist_scale * rew_approach + rew_time
-            rew = self.rew_head_scaled + rew_time + self.rew_head_approach_scaled + self.rew_approach_scaled
+            # rew = self.rew_head_scaled + rew_time + self.rew_head_approach_scaled + self.rew_approach_scaled
+            rew = self.rew_head_scaled + rew_time + self.rew_approach_scaled
 
             # print to user:
             # if not self.is_eval:
             #     print(f" @ episode {self.episode_counter: 3d} | abs_diff (deg): {abs_diff/np.pi*180: 6.4f} | head_rew: {self.rew_head_scaled: 6.4f} | d_head: {(self.prev_abs_diff - abs_diff): 6.4f} | head_approach_rew: {self.rew_head_approach_scaled:.3f}                                 ", end = "\r")
-            # print(f" @ episode {self.episode_counter}                                                                               ", end="\r")
-            info = {"rew_head": self.rew_head_scaled, "rew_head_approach" : self.rew_head_approach_scaled, "rew_approach" : self.rew_approach_scaled}
+            # print(f" @ episode {self.episode_counter} | rew_head: {self.rew_head_scaled} | rew_approach: {self.rew_approach_scaled}                                                                              ", end="\r")
+            # info = {"rew_head": self.rew_head_scaled, "rew_head_approach" : self.rew_head_approach_scaled, "rew_approach" : self.rew_approach_scaled}
+            info = {"rew_head": self.rew_head_scaled, "rew_approach" : self.rew_approach_scaled}
 
         # advance d_goal history:
         self.d_goal_last = d_goal
