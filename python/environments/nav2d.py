@@ -434,7 +434,7 @@ class Nav2D(MujocoEnv):
             angle_threshold = 1.25 
             angle_threshold_rad = angle_threshold / 180 * np.pi
             if abs_diff <= angle_threshold_rad:
-                rew_head += self.rew_head_scale - self.rew_head_scale / angle_threshold_rad * abs_diff
+                rew_head += 1 - 1 / angle_threshold_rad * abs_diff
             self.rew_head_scaled = self.rew_head_scale * rew_head
 
             #--- penalize for every timestep not at the goal:
