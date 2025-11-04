@@ -76,12 +76,17 @@ class Nav2D(MujocoEnv):
         self.agent_bound_init = 2 * self.agent_radius
         self.agent_bound = self.agent_bound_init
         self.agent_bound_final = self.size - 2*self.agent_radius
+        self.agent_bound_rate = self.agent_frequency / 500
+        self.agent_bound_shift_ratio = 0.8
+        self.agent_bound_shift = self.agent_bound_shift_ratio * self.agent_bound_init / self.agent_bound_rate
         self.agent_rand_counter = 0
 
         self.angle_bound = 2*np.pi
         self.goal_bound_init = 0
         self.goal_bound = self.goal_bound_init
         self.goal_bound_final = self.size - self.agent_radius
+        self.goal_bound_rate = (self.goal_bound_final - self.goal_bound_init)/(((self.agent_bound_final - (2-self.agent_bound_shift_ratio) * self.agent_bound_init)/self.agent_bound_rate + (1-self.agent_bound_shift_ratio) * self.agent_bound_shift) * self.agent_frequency / self.goal_frequency)
+        self.goal_bound_shift = self.goal_bound_init / self.goal_bound_rate - (2-self.agent_bound_shift_ratio) *  (self.agent_bound_init / self.agent_bound_rate - self.agent_bound_shift) * self.agent_frequency / self.goal_frequency
         self.goal_rand_counter = 0
         
         # --- define the uninitialized location of the agent and the target
@@ -311,11 +316,19 @@ class Nav2D(MujocoEnv):
         if not self.is_eval:
             if self.episode_counter % self.agent_frequency == 0:
                 self.agent_rand_counter += 1
-                self.agent_bound = (self.agent_bound_final-self.agent_bound_init)/2 * (np.tanh((self.agent_frequency/250) * self.agent_rand_counter - 2) + 1) + self.agent_bound_init
+                # self.agent_bound = (self.agent_bound_final-self.agent_bound_init)/2 * (np.tanh((self.agent_frequency/250) * self.agent_rand_counter - 2) + 1) + self.agent_bound_init
+                self.agent_bound = max(
+                    min(self.agent_bound_rate * (self.agent_rand_counter + self.agent_bound_shift), 
+                        self.agent_bound_final), 
+                    self.agent_bound_init)
                 self.agent_randomize = True
             if self.episode_counter % self.goal_frequency == 0:
                 self.goal_rand_counter += 1
-                self.goal_bound = (self.goal_bound_final-self.goal_bound_init)/2 * (np.tanh((self.goal_frequency/250) * self.goal_rand_counter - 3) + 1) + self.goal_bound_init
+                # self.goal_bound = (self.goal_bound_final-self.goal_bound_init)/2 * (np.tanh((self.goal_frequency/250) * self.goal_rand_counter - 3) + 1) + self.goal_bound_init
+                self.goal_bound = max(
+                    min((self.goal_bound_rate * (self.goal_rand_counter + self.goal_bound_shift)), 
+                        self.goal_bound_final), 
+                    self.goal_bound_init)
                 self.goal_randomize = True
             if self.episode_counter % self.obstacle_frequency == 0:
                 self.obstacle_randomize = True
