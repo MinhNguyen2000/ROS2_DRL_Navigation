@@ -464,11 +464,9 @@ class Nav2D(MujocoEnv):
             rew = self.rew_head_scaled + rew_time + self.rew_approach_scaled + self.rew_head_approach_scaled
 
             # print to user:
-            # if not self.is_eval:
-            #     print(f" @ episode {self.episode_counter: 3d} | abs_diff (deg): {abs_diff/np.pi*180: 6.4f} | head_rew: {self.rew_head_scaled: 6.4f} | d_head: {(self.prev_abs_diff - abs_diff): 6.4f} | head_approach_rew: {self.rew_head_approach_scaled:.3f}                                 ", end = "\r")
-            print(f" @ episode {self.episode_counter} | rew_head: {self.rew_head_scaled:.4f} | rew_head_approach: {self.rew_head_approach_scaled:.4f}| rew_approach: {self.rew_approach_scaled:.4f} | total: {rew:.4f}                                                                              ", end="\r")
-            # info = {"rew_head": self.rew_head_scaled, "rew_head_approach" : self.rew_head_approach_scaled, "rew_approach" : self.rew_approach_scaled}
-            info = {"rew_head": self.rew_head_scaled, "rew_approach" : self.rew_approach_scaled}
+            if self.render_mode == "human":
+                print(f" @ episode {self.episode_counter} | rew_head: {self.rew_head_scaled:.4f} | rew_head_approach: {self.rew_head_approach_scaled:.4f}| rew_approach: {self.rew_approach_scaled:.4f} | total: {rew}                                                                              ", end="\r")
+            info = {"rew_head": self.rew_head_scaled, "rew_head_approach" : self.rew_head_approach_scaled, "rew_approach" : self.rew_approach_scaled}
 
         # advance d_goal history:
         self.d_goal_last = d_goal
