@@ -438,10 +438,10 @@ class Nav2D(MujocoEnv):
         else:
             #---  BASE HEADING REWARD:
             # penalize based on the absolute difference in heading:
-            rew_head = 1.0 - np.tanh(10*abs_diff)
+            rew_head = 1.0 - np.tanh(3*abs_diff)
 
             # bonus reward for being within +/- 5 degree of the desired trajectory:
-            angle_threshold = 1.25
+            angle_threshold = 2.5
             angle_threshold_rad = angle_threshold / 180 * np.pi
             if abs_diff <= angle_threshold_rad:
                 rew_head += 1 - 1 / angle_threshold_rad * abs_diff
@@ -465,7 +465,7 @@ class Nav2D(MujocoEnv):
 
             # print to user:
             if self.render_mode == "human":
-                print(f" @ episode {self.episode_counter} | rew_head: {self.rew_head_scaled:.4f} | rew_head_approach: {self.rew_head_approach_scaled:.4f}| rew_approach: {self.rew_approach_scaled:.4f} | total: {rew}                                                                              ", end="\r")
+                print(f" @ episode {self.episode_counter} | rew_head: {self.rew_head_scaled:.4f} | head_diff: {rew_head_approach:.5f} | rew_head_approach: {self.rew_head_approach_scaled:.4f} | vel: {action[0]:.5f} | pos_diff: {rew_approach:.5f} | rew_approach: {self.rew_approach_scaled:.4f} | total: {rew:.5f}                                                                              ", end="\r")
             info = {"rew_head": self.rew_head_scaled, "rew_head_approach" : self.rew_head_approach_scaled, "rew_approach" : self.rew_approach_scaled}
 
         # advance d_goal history:
