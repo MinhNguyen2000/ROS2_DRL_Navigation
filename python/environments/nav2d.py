@@ -467,7 +467,7 @@ class Nav2D(MujocoEnv):
 
             #--- DISTANCE REWARD:
             # this reward term incentivizes closing the distance between the agent and the goal:
-            rew_dist = 1 - (d_goal / self.dmax)
+            rew_dist = 1 - np.tanh(5 * d_goal / self.dmax)
             self.rew_dist_scaled = self.rew_dist_scale * rew_dist
 
             #--- DISTANCE APPROACH REWARD:
