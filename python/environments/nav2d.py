@@ -161,6 +161,7 @@ class Nav2D(MujocoEnv):
         self.rew_head_scale = reward_scale_options.get("rew_head_scale", 1) if reward_scale_options else 1
         self.rew_head_approach_scale = reward_scale_options.get("rew_head_approach_scale", 1) if reward_scale_options else 100
         self.rew_dist_scale = reward_scale_options.get("rew_dist_scale", 1) if reward_scale_options else 1
+        self.rew_dist_approach_scale = reward_scale_options.get("rew_dist_approach_scale", 1) if reward_scale_options else 100
         self.rew_goal_scale = reward_scale_options.get("rew_goal_scale", 1) if reward_scale_options else 200
         self.rew_obst_scale = reward_scale_options.get("rew_obst_scale", 1) if reward_scale_options else -100
 
@@ -462,17 +463,22 @@ class Nav2D(MujocoEnv):
             #--- TIME REWARD:
             rew_time = -0.05    # going to keep this very small relative to the reward scale
 
+            #--- DISTANCE REWARD:
+            # this reward term incentivizes closing the distance between the agent and the goal:
+            rew_dist = 1 - (d_goal / self.dmax)
+            self.rew_dist_scaled = self.rew_dist_scale * rew_dist
+
             #--- DISTANCE APPROACH REWARD:
-            rew_approach = max((self.d_goal_last - d_goal), 0)
-            self.rew_approach_scaled = rew_approach * self.rew_dist_scale
+            rew_dist_approach = max((self.d_goal_last - d_goal), 0)
+            self.rew_dist_approach_scaled = rew_dist_approach * self.rew_dist_approach_scale
 
             #--- TOTAL REWARD TERM:
-            rew = self.rew_head_scaled + rew_time + self.rew_approach_scaled + self.rew_head_approach_scaled
+            rew = self.rew_head_scaled + self.rew_head_approach_scaled + self.rew_dist_scaled + self.rew_dist_approach_scaled + rew_time
 
             # print to user:
             if self.render_mode == "human":
-                print(f" @ episode {self.episode_counter} | rew_head: {self.rew_head_scaled:.4f} | head_diff: {rew_head_approach:.5f} | rew_head_approach: {self.rew_head_approach_scaled:.4f} | vel: {action_rot.round(3)} | pos_diff: {rew_approach:.5f} | rew_approach: {self.rew_approach_scaled:.4f} | total: {rew:.5f}                                                                              ", end="\r")
-            info = {"rew_head": self.rew_head_scaled, "rew_head_approach" : self.rew_head_approach_scaled, "rew_approach" : self.rew_approach_scaled}
+                print(f" @ episode {self.episode_counter} | vel: {action_rot.round(3)} | rew_head: {self.rew_head_scaled:.4f} | rew_head_approach: {self.rew_head_approach_scaled:.4f} | rew_dist: {self.rew_dist_scaled:.4f} | rew_dist_approach: {self.rew_dist_approach_scaled:.4f} | total: {rew:.5f}                                                                              ", end="\r")
+            info = {"rew_head": self.rew_head_scaled, "rew_head_approach" : self.rew_head_approach_scaled, "rew_dist_approach" : self.rew_dist_approach_scaled}
 
         # advance d_goal history:
         self.d_goal_last = d_goal
