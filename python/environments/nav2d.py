@@ -18,7 +18,7 @@ class Nav2D(MujocoEnv):
                  json_file: str = "environment_params.json",
                  frame_skip: int = 2,
                  default_camera_config: dict[str, float | int] | None = None,
-                 render_mode: str | None = None,
+                 render_mode: str = "rgb_array",
                  width: int = 480,
                  height: int = 480,
                  camera_id: int | None = None,
@@ -162,12 +162,14 @@ class Nav2D(MujocoEnv):
         self.rew_head_approach_scale = reward_scale_options.get("rew_head_approach_scale", 1) if reward_scale_options else 100
         self.rew_dist_scale = reward_scale_options.get("rew_dist_scale", 1) if reward_scale_options else 1
         self.rew_dist_approach_scale = reward_scale_options.get("rew_dist_approach_scale", 1) if reward_scale_options else 100
-        self.rew_goal_scale = reward_scale_options.get("rew_goal_scale", 1) if reward_scale_options else 200
-        self.rew_obst_scale = reward_scale_options.get("rew_obst_scale", 1) if reward_scale_options else -100
+        self.rew_goal_scale = reward_scale_options.get("rew_goal_scale", 1) if reward_scale_options else 2000
+        self.rew_obst_scale = reward_scale_options.get("rew_obst_scale", 1) if reward_scale_options else -1000
 
         # --- intialize reward components
         self.rew_head_scaled = 0
         self.rew_head_approach_scaled = 0
+        self.rew_dist_scaled = 0
+        self.rew_dist_approach_scaled = 0
 
         # --- whether an evaluation environment or not
         self.is_eval = is_eval

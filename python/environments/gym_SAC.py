@@ -29,7 +29,8 @@ def main():
         reward_scale = {
             "rew_head_scale" : 2.5,
             "rew_head_approach_scale" : 50.0,
-            "rew_dist_scale" : 250,
+            "rew_dist_scale" : 2.5,
+            "rew_dist_approach_scale" : 250,
             "rew_goal_scale" : 5000.0,
             "rew_obst_scale" : -1000.0
         }
@@ -60,8 +61,8 @@ def main():
         train_freq = 1
         learning_starts = 0
         target_update_interval = 1
-        gradient_steps = 4
-        target_entropy = -env.action_space.shape[0]
+        gradient_steps = 1
+        target_entropy = "auto"
         action_noise = None
         verbose = 0
         gpu = True
@@ -94,7 +95,7 @@ def main():
 
         # training parameters:
         number_of_runs = 100
-        steps_per_run = 50000
+        steps_per_run = 25000
         model_save_freq = max(int(number_of_runs / 20), 1)
 
         # model saving parameters:
@@ -113,6 +114,7 @@ def main():
 
         # need to save the last model:
         model.save(os.path.join(results_path, f"run_{run}"))
+        print(f"episode: {env.get_attr("episode_counter")}")
 
         # close environment when done:
         env.close()
