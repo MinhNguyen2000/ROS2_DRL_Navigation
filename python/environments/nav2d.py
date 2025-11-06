@@ -147,8 +147,7 @@ class Nav2D(MujocoEnv):
 
         self.window = None
         self.clock = None
-
-        self.rot_matrix = np.zeros((2,2))
+        
         self.agent_id = self.model.body("agent").id
         self.goal_id = self.model.body("goal").id
 
@@ -285,8 +284,8 @@ class Nav2D(MujocoEnv):
         self.d_goal_last = self._get_l2_distance(agent_pos, goal_pos)
 
         # get the last angular difference:
-        required_heading = self.get_heading(goal_pos, agent_pos)
-        self.prev_abs_diff = abs((required_heading - qpos[2] + np.pi) % (2*np.pi) - np.pi)
+        required_heading = self.get_heading(agent_pos=agent_pos, goal_pos=goal_pos)
+        self.prev_abs_diff = abs((required_heading - qpos[2] % (2*np.pi) + np.pi) % (2*np.pi) - np.pi)
         return ob
     
     def get_heading(self, 
