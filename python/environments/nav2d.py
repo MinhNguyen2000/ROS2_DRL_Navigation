@@ -81,7 +81,7 @@ class Nav2D(MujocoEnv):
         # self.agent_bound_shift = self.agent_bound_shift_ratio * self.agent_bound_init / self.agent_bound_rate
         # self.agent_rand_counter = 0
 
-        # self.angle_bound = 2*np.pi
+        self.angle_bound = np.pi/2
         # self.goal_bound_init = 0
         # self.goal_bound = self.goal_bound_init
         # self.goal_bound_final = self.size - self.agent_radius
@@ -247,6 +247,7 @@ class Nav2D(MujocoEnv):
         # get a copy of the initial_qpos
         qpos = np.copy(self.init_qpos)      # initially agent is at [0,0], goal is at [-0.5, -0.5]
         qvel = np.copy(self.init_qvel)
+        qpos[2] = self.np_random.uniform(size=1, low=0, high=self.angle_bound)
 
         # if it is time to randomize the agent:
         if agent_randomize:
@@ -397,7 +398,8 @@ class Nav2D(MujocoEnv):
         action_rot[1] = sin_theta * action_pre[0] + cos_theta * action_pre[1]
 
         # scale the action as necessary:
-        action_rot[2] = action_pre[2] * 3
+        action_rot[0:2] *= 2
+        action_rot[2] *= 3
 
         self.data.qvel[0:3] = action_rot
 
@@ -469,7 +471,7 @@ class Nav2D(MujocoEnv):
 
             # print to user:
             if self.render_mode == "human":
-                print(f" @ episode {self.episode_counter} | rew_head: {self.rew_head_scaled:.4f} | head_diff: {rew_head_approach:.5f} | rew_head_approach: {self.rew_head_approach_scaled:.4f} | vel: {action.round(3)} | pos_diff: {rew_approach:.5f} | rew_approach: {self.rew_approach_scaled:.4f} | total: {rew:.5f}                                                                              ", end="\r")
+                print(f" @ episode {self.episode_counter} | rew_head: {self.rew_head_scaled:.4f} | head_diff: {rew_head_approach:.5f} | rew_head_approach: {self.rew_head_approach_scaled:.4f} | vel: {action_rot.round(3)} | pos_diff: {rew_approach:.5f} | rew_approach: {self.rew_approach_scaled:.4f} | total: {rew:.5f}                                                                              ", end="\r")
             info = {"rew_head": self.rew_head_scaled, "rew_head_approach" : self.rew_head_approach_scaled, "rew_approach" : self.rew_approach_scaled}
 
         # advance d_goal history:
