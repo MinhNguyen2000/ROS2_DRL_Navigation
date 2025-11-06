@@ -53,13 +53,13 @@ class Nav2D(MujocoEnv):
         self.n_rays = 8
 
         self.episode_counter = 0
-        self.agent_frequency = 1
-        self.goal_frequency = 5
-        self.obstacle_frequency = 25
+        # self.agent_frequency = 1
+        # self.goal_frequency = 5
+        # self.obstacle_frequency = 25
 
-        self.agent_randomize = False
-        self.goal_randomize = False
-        self.obstacle_randomize = False
+        # self.agent_randomize = False
+        # self.goal_randomize = False
+        # self.obstacle_randomize = False
 
         # --- load the simulation parameters
         dir_path = os.path.dirname(os.path.abspath(__file__))
@@ -73,25 +73,27 @@ class Nav2D(MujocoEnv):
         self.dmax = np.sqrt(2 * scaled_inner_length ** 2, dtype = np.float32)
 
         # --- randomization bounds
-        self.agent_bound_init = 2 * self.agent_radius
-        self.agent_bound = self.agent_bound_init
-        self.agent_bound_final = self.size - 2*self.agent_radius
-        self.agent_bound_rate = self.agent_frequency / 500
-        self.agent_bound_shift_ratio = 0.8
-        self.agent_bound_shift = self.agent_bound_shift_ratio * self.agent_bound_init / self.agent_bound_rate
-        self.agent_rand_counter = 0
+        # self.agent_bound_init = 2 * self.agent_radius
+        # self.agent_bound = self.agent_bound_init
+        # self.agent_bound_final = self.size - 2*self.agent_radius
+        # self.agent_bound_rate = self.agent_frequency / 500
+        # self.agent_bound_shift_ratio = 0.8
+        # self.agent_bound_shift = self.agent_bound_shift_ratio * self.agent_bound_init / self.agent_bound_rate
+        # self.agent_rand_counter = 0
 
-        self.angle_bound = 2*np.pi
-        self.goal_bound_init = 0
-        self.goal_bound = self.goal_bound_init
-        self.goal_bound_final = self.size - self.agent_radius
-        self.goal_bound_rate = (self.goal_bound_final - self.goal_bound_init)/(((self.agent_bound_final - (2-self.agent_bound_shift_ratio) * self.agent_bound_init)/self.agent_bound_rate + (1-self.agent_bound_shift_ratio) * self.agent_bound_shift) * self.agent_frequency / self.goal_frequency)
-        self.goal_bound_shift = self.goal_bound_init / self.goal_bound_rate - (2-self.agent_bound_shift_ratio) *  (self.agent_bound_init / self.agent_bound_rate - self.agent_bound_shift) * self.agent_frequency / self.goal_frequency
-        self.goal_rand_counter = 0
+        # self.angle_bound = 2*np.pi
+        # self.goal_bound_init = 0
+        # self.goal_bound = self.goal_bound_init
+        # self.goal_bound_final = self.size - self.agent_radius
+        # self.goal_bound_rate = (self.goal_bound_final - self.goal_bound_init)/(((self.agent_bound_final - (2-self.agent_bound_shift_ratio) * self.agent_bound_init)/self.agent_bound_rate + (1-self.agent_bound_shift_ratio) * self.agent_bound_shift) * self.agent_frequency / self.goal_frequency)
+        # self.goal_bound_shift = self.goal_bound_init / self.goal_bound_rate - (2-self.agent_bound_shift_ratio) *  (self.agent_bound_init / self.agent_bound_rate - self.agent_bound_shift) * self.agent_frequency / self.goal_frequency
+        # self.goal_rand_counter = 0
         
         # --- define the uninitialized location of the agent and the target
-        self._agent_loc = self.np_random.uniform(size=2, low=-self.agent_bound_init, high=self.agent_bound_init)
-        self._task_loc = self.np_random.uniform(size=2, low=-self.goal_bound_init, high=self.goal_bound_init)
+        # self._agent_loc = self.np_random.uniform(size=2, low=-self.agent_bound_init, high=self.agent_bound_init)
+        # self._task_loc = self.np_random.uniform(size=2, low=-self.goal_bound_init, high=self.goal_bound_init)
+        self._agent_loc = [-0.75, -0.75]
+        self._task_loc = [0.75, 0.75]
         
         # --- load simulation params and initialize the simulation
         env =  MakeEnv(params)
@@ -313,41 +315,43 @@ class Nav2D(MujocoEnv):
                 "rew_head_approach": self.rew_head_approach_scaled}
 
         # check randomize conditions:
-        if not self.is_eval:
-            if self.episode_counter % self.agent_frequency == 0:
-                self.agent_rand_counter += 1
-                # self.agent_bound = (self.agent_bound_final-self.agent_bound_init)/2 * (np.tanh((self.agent_frequency/250) * self.agent_rand_counter - 2) + 1) + self.agent_bound_init
-                self.agent_bound = max(
-                    min(self.agent_bound_rate * (self.agent_rand_counter + self.agent_bound_shift), 
-                        self.agent_bound_final), 
-                    self.agent_bound_init)
-                self.agent_randomize = True
-            if self.episode_counter % self.goal_frequency == 0:
-                self.goal_rand_counter += 1
-                # self.goal_bound = (self.goal_bound_final-self.goal_bound_init)/2 * (np.tanh((self.goal_frequency/250) * self.goal_rand_counter - 3) + 1) + self.goal_bound_init
-                self.goal_bound = max(
-                    min((self.goal_bound_rate * (self.goal_rand_counter + self.goal_bound_shift)), 
-                        self.goal_bound_final), 
-                    self.goal_bound_init)
-                self.goal_randomize = True
-            if self.episode_counter % self.obstacle_frequency == 0:
-                self.obstacle_randomize = True
+        # if not self.is_eval:
+        #     if self.episode_counter % self.agent_frequency == 0:
+        #         self.agent_rand_counter += 1
+        #         # self.agent_bound = (self.agent_bound_final-self.agent_bound_init)/2 * (np.tanh((self.agent_frequency/250) * self.agent_rand_counter - 2) + 1) + self.agent_bound_init
+        #         self.agent_bound = max(
+        #             min(self.agent_bound_rate * (self.agent_rand_counter + self.agent_bound_shift), 
+        #                 self.agent_bound_final), 
+        #             self.agent_bound_init)
+        #         self.agent_randomize = True
+        #     if self.episode_counter % self.goal_frequency == 0:
+        #         self.goal_rand_counter += 1
+        #         # self.goal_bound = (self.goal_bound_final-self.goal_bound_init)/2 * (np.tanh((self.goal_frequency/250) * self.goal_rand_counter - 3) + 1) + self.goal_bound_init
+        #         self.goal_bound = max(
+        #             min((self.goal_bound_rate * (self.goal_rand_counter + self.goal_bound_shift)), 
+        #                 self.goal_bound_final), 
+        #             self.goal_bound_init)
+        #         self.goal_randomize = True
+        #     if self.episode_counter % self.obstacle_frequency == 0:
+        #         self.obstacle_randomize = True
 
-            # reset mujoco model:
-            ob = self.reset_model(self.agent_randomize, self.goal_randomize, self.obstacle_randomize)
+        #     # reset mujoco model:
+        #     ob = self.reset_model(self.agent_randomize, self.goal_randomize, self.obstacle_randomize)
         
-        else: # if an evaluation env, always reset and with the largest bound possible
-            self.agent_bound = self.agent_bound_final
-            self.goal_bound = self.goal_bound_final
-            ob = self.reset_model(agent_randomize=True,
-                                  goal_randomize=True,
-                                  obstacle_randomize=True)
+        # else: # if an evaluation env, always reset and with the largest bound possible
+        #     self.agent_bound = self.agent_bound_final
+        #     self.goal_bound = self.goal_bound_final
+        #     ob = self.reset_model(agent_randomize=True,
+        #                           goal_randomize=True,
+        #                           obstacle_randomize=True
 
+        # # reset flags:
+        # self.agent_randomize = False
+        # self.goal_randomize = False
+        # self.obstacle_randomize = False
 
-        # reset flags:
-        self.agent_randomize = False
-        self.goal_randomize = False
-        self.obstacle_randomize = False
+        # form observation:
+        ob = self.reset_model()
 
         # render if mode == "human":
         if self.render_mode == "human":
@@ -465,7 +469,7 @@ class Nav2D(MujocoEnv):
 
             # print to user:
             if self.render_mode == "human":
-                print(f" @ episode {self.episode_counter} | rew_head: {self.rew_head_scaled:.4f} | head_diff: {rew_head_approach:.5f} | rew_head_approach: {self.rew_head_approach_scaled:.4f} | vel: {action[0]:.5f} | pos_diff: {rew_approach:.5f} | rew_approach: {self.rew_approach_scaled:.4f} | total: {rew:.5f}                                                                              ", end="\r")
+                print(f" @ episode {self.episode_counter} | rew_head: {self.rew_head_scaled:.4f} | head_diff: {rew_head_approach:.5f} | rew_head_approach: {self.rew_head_approach_scaled:.4f} | vel: {action.round(3)} | pos_diff: {rew_approach:.5f} | rew_approach: {self.rew_approach_scaled:.4f} | total: {rew:.5f}                                                                              ", end="\r")
             info = {"rew_head": self.rew_head_scaled, "rew_head_approach" : self.rew_head_approach_scaled, "rew_approach" : self.rew_approach_scaled}
 
         # advance d_goal history:
