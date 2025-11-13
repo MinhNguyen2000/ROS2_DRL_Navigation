@@ -53,7 +53,7 @@ class Nav2D(MujocoEnv):
         self.n_rays = 8
 
         self.episode_counter = 0
-        self.agent_frequency = 2
+        self.agent_frequency = 1
         self.goal_frequency = 10
         self.obstacle_frequency = 25
 
@@ -158,12 +158,13 @@ class Nav2D(MujocoEnv):
         self.obstacle_threshold = 0.05 + self.agent_radius
 
         # --- scale of each reward
-        self.rew_head_scale = reward_scale_options.get("rew_head_scale", 1) if reward_scale_options else 1
-        self.rew_head_approach_scale = reward_scale_options.get("rew_head_approach_scale", 1) if reward_scale_options else 100
-        self.rew_dist_scale = reward_scale_options.get("rew_dist_scale", 1) if reward_scale_options else 1
-        self.rew_dist_approach_scale = reward_scale_options.get("rew_dist_approach_scale", 1) if reward_scale_options else 100
-        self.rew_goal_scale = reward_scale_options.get("rew_goal_scale", 1) if reward_scale_options else 2000
-        self.rew_obst_scale = reward_scale_options.get("rew_obst_scale", 1) if reward_scale_options else -1000
+        self.rew_head_scale             = reward_scale_options.get("rew_head_scale", 1)             if reward_scale_options else 1
+        self.rew_head_approach_scale    = reward_scale_options.get("rew_head_approach_scale", 100)  if reward_scale_options else 100
+        self.rew_dist_scale             = reward_scale_options.get("rew_dist_scale", 1)             if reward_scale_options else 1
+        self.rew_dist_approach_scale    = reward_scale_options.get("rew_dist_approach_scale", 100)  if reward_scale_options else 100
+        self.rew_goal_scale             = reward_scale_options.get("rew_goal_scale", 5000)          if reward_scale_options else 5000
+        self.rew_obst_scale             = reward_scale_options.get("rew_obst_scale", -1000)         if reward_scale_options else -1000
+        self.rew_time                   = reward_scale_options.get("rew_time", -0.05)               if reward_scale_options else -0.05
 
         # --- intialize reward components
         self.rew_head_scaled = 0
@@ -447,7 +448,7 @@ class Nav2D(MujocoEnv):
         else:
             #---  BASE HEADING REWARD:
             # penalize based on the absolute difference in heading:
-            rew_head = 1.0 - np.tanh(3*abs_diff)
+            rew_head = 1.0 - np.tanh(3 * abs_diff / np.pi)
 
             # bonus reward for being within +/- 5 degree of the desired trajectory:
             angle_threshold = 2.5
@@ -467,7 +468,7 @@ class Nav2D(MujocoEnv):
 
             #--- DISTANCE REWARD:
             # this reward term incentivizes closing the distance between the agent and the goal:
-            rew_dist = 1 - np.tanh(5 * d_goal)
+            rew_dist = 1 - np.tanh(5 * d_goal / self.dmax)
             self.rew_dist_scaled = self.rew_dist_scale * rew_dist
 
             #--- DISTANCE APPROACH REWARD:
