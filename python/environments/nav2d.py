@@ -82,7 +82,7 @@ class Nav2D(MujocoEnv):
         # self.agent_rand_counter = 0
         self.agent_bound = self.size - 2*self.agent_radius
 
-        self.angle_bound = np.pi/4
+        self.angle_bound = np.pi
         # self.goal_bound_init = 0
         # self.goal_bound = self.goal_bound_init
         self.goal_bound_final = self.size - self.agent_radius
@@ -265,9 +265,8 @@ class Nav2D(MujocoEnv):
 
             # randomize the pose of the agent by randomly sampling between 0 and 2*pi:
             heading = self.get_heading(agent_pos=qpos[0:2], goal_pos=qpos[3:5])
-            octant = (heading // (np.pi/4)) + 1
-            # print(f"agent_pos: {qpos[0:2]} | goal_pos: {qpos[3:5]} | heading (deg): {heading/np.pi*180:5.2f} | octant: {octant:5.2f}     ")
-            qpos[2] = self.np_random.uniform(size=1, low= (octant-1) * self.angle_bound, high=octant * self.angle_bound)
+            
+            qpos[2] = self.np_random.uniform(size = 1, low = heading - self.angle_bound / 2, high = heading + self.angle_bound / 2)
 
             # randomize the velocity of the agent:
             qvel[0:2] = self.np_random.uniform(size=2, low=noise_low, high=noise_high)
