@@ -109,7 +109,7 @@ def train_model(model,
                 number_of_runs : int = 100,
                 steps_per_run : int = 25000):
     # set the model saving frequency:
-    model_save_freq = max(int(number_of_runs / 20), 1)
+    model_save_freq = max(int(number_of_runs / 10), 1)
 
     # set the model saving path:
     base_path = os.path.join(dir_path, "results", "Nav2D_SAC_SB3_results")
@@ -159,17 +159,18 @@ def objective_model_params(trial):
     steps_per_run = 25000
 
     # define the desired reward scale:
-    reward_scale = {"rew_head_scale" : 5.5,
-                    "rew_head_approach_scale" : 90.0,
-                    "rew_dist_scale" : 6.0,
-                    "rew_dist_approach_scale" : 95,
+    reward_scale = {"rew_head_scale" : 10.0,
+                    "rew_head_approach_scale" : 220.0,
+                    "rew_dist_scale" : 3.5,
+                    "rew_dist_approach_scale" : 200.0,
                     "rew_goal_scale" : 5000.0,
-                    "rew_obst_scale" : -1000.0}
+                    "rew_obst_scale" : -1000.0, 
+                    "rew_time" : -0.25}
     
     # suggest values for hyperparameters:
-    gamma = trial.suggest_float("gamma", low = 0.9, high = 0.99, step = 0.025)
-    actor_lr = trial.suggest_float("actor_lr", low = 1e-5, high = 1e-3, step = 1e-5)
-    critic_lr = trial.suggest_float("critic_lr", low = 1e-5, high = 1e-3, step = 1e-5)
+    gamma = trial.suggest_categorical("gamma", [0.9, 0.95, 0.99, 0.995, 0.999])
+    actor_lr = trial.suggest_categorical("actor_lr", [1e-5, 2.5e-5, 5e-5, 1e-4, 2.5e-4, 5e-4])
+    critic_lr = trial.suggest_categorical("critic_lr", [1e-5, 2.5e-5, 5e-5, 1e-4, 2.5e-4, 5e-4])
     buffer_size = trial.suggest_int("buffer_size", low = int(1e6), high = int(5e6), step = int(2.5e5))
     tau = trial.suggest_float("tau", low = 1e-3, high = 1e-2, step = 1e-3)
     ent_coef = trial.suggest_categorical("ent_coeff", ["auto", "auto_0.1"])
@@ -209,6 +210,9 @@ def objective_model_params(trial):
                 number_of_runs = number_of_runs,
                 steps_per_run = steps_per_run)
     
+    # close env:
+    model.env.close()
+    
     # evaluate the policy:
     n_evals = 25
     eval_env = gym.make("Nav2D-v0", max_episode_steps = 1_000, render_mode = "rgb_array", is_eval = True)
@@ -227,33 +231,34 @@ def main(do_studies : bool = False):
     tensorboard_log_dir = os.path.join(dir_path, "results", "Nav2D_SAC_SB3_tensorboard")
 
     # set the training parameters:
-    number_of_runs = 100
+    number_of_runs = 1000
     steps_per_run = 50000
 
     # if not using optuna:
     if not do_studies:
         # reward_scale:
-        reward_scale = {"rew_head_scale" : 2.0,
-                        "rew_head_approach_scale" : 50,
-                        "rew_dist_scale" : 5.0,
-                        "rew_dist_approach_scale" : 250,
+        reward_scale = {"rew_head_scale" : 10.0,
+                        "rew_head_approach_scale" : 220.0,
+                        "rew_dist_scale" : 3.5,
+                        "rew_dist_approach_scale" : 200.0,
                         "rew_goal_scale" : 5000.0,
-                        "rew_obst_scale" : -1000.0}
+                        "rew_obst_scale" : -1000.0, 
+                        "rew_time" : -0.25}
         
         # model hyperparameters:
         hyperparameters = {"policy" : "MlpPolicy",
                            "gamma" : 0.99,
-                           "actor_lr" : 1e-4,
-                           "critic_lr" : 1e-4,
-                           "buffer_size" : int(1e6),
+                           "actor_lr" : 3e-4,
+                           "critic_lr" : 3e-4,
+                           "buffer_size" : int(2.5e6),
                            "batch_size" : 4096,
                            "tau" : 5e-3,
                            "ent_coef" : "auto_0.1",
-                           "train_freq" : 1,
+                           "train_freq" : 2,
                            "learning_starts" : 0,
                            "target_update_interval" : 1,
-                           "gradient_steps" : 1,
-                           "target_entropy" : "auto",
+                           "gradient_steps" : 4,
+                           "target_entropy" : -2,
                            "action_noise" : None,
                            "verbose" : 0, 
                            "gpu" : True,
@@ -273,11 +278,13 @@ def main(do_studies : bool = False):
 
     # if using optuna:
     else:
-        # set the study parameters:
-        study_name = "model_params_nov7"
+        # # set the study parameters:
+        study_name = "model_params_nov13"
         direction = "maximize"
         storage = "sqlite:///python/environments/results/optuna_results.db"
         load_if_exists = True
+
+        # optuna.delete_study(study_name = study_name, storage = storage)
 
         # create the study object:
         study = optuna.create_study(study_name = study_name,
@@ -289,4 +296,4 @@ def main(do_studies : bool = False):
         study.optimize(objective_model_params, n_trials = 100)
 
 if __name__=="__main__":
-    main(do_studies = True)
+    main(do_studies = False)
