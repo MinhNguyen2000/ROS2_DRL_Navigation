@@ -24,6 +24,7 @@ class Nav2D(MujocoEnv):
                  camera_id: int | None = None,
                  camera_name: str | None = None,
                  reward_scale_options: dict[str, float] | None = None,
+                 randomization_options: dict[str, float] | None = None,
                  visual_options: dict[int, bool] | None = None,
                  is_eval: bool = False
                 ):
@@ -53,9 +54,9 @@ class Nav2D(MujocoEnv):
         self.n_rays = 8
 
         self.episode_counter = 0
-        self.agent_frequency = 1
-        self.goal_frequency = 10
-        self.obstacle_frequency = 25
+        self.agent_frequency    = randomization_options.get("agent_freq", 1)    if randomization_options else 1
+        self.goal_frequency     = randomization_options.get("goal_freq", 1)     if randomization_options else 1
+        self.obstacle_frequency = randomization_options.get("obstacle_freq", 1) if randomization_options else 1
 
         self.agent_randomize = False
         self.goal_randomize = False
@@ -84,8 +85,8 @@ class Nav2D(MujocoEnv):
 
         self.angle_bound = np.pi
         # self.goal_bound_init = 0
-        # self.goal_bound = self.goal_bound_init
         self.goal_bound_final = self.size - self.agent_radius
+        self.goal_bound = self.goal_bound_final
         # self.goal_bound_rate = (self.goal_bound_final - self.goal_bound_init)/(((self.agent_bound_final - (2-self.agent_bound_shift_ratio) * self.agent_bound_init)/self.agent_bound_rate + (1-self.agent_bound_shift_ratio) * self.agent_bound_shift) * self.agent_frequency / self.goal_frequency)
         # self.goal_bound_shift = self.goal_bound_init / self.goal_bound_rate - (2-self.agent_bound_shift_ratio) *  (self.agent_bound_init / self.agent_bound_rate - self.agent_bound_shift) * self.agent_frequency / self.goal_frequency
         # self.goal_rand_counter = 0
@@ -329,13 +330,13 @@ class Nav2D(MujocoEnv):
                 #         self.agent_bound_final), 
                 #     self.agent_bound_init)
                 self.agent_randomize = True
-            # if self.episode_counter % self.goal_frequency == 0:
+            if self.episode_counter % self.goal_frequency == 0:
             #     self.goal_rand_counter += 1
             #     self.goal_bound = max(
             #         min((self.goal_bound_rate * (self.goal_rand_counter + self.goal_bound_shift)), 
             #             self.goal_bound_final), 
             #         self.goal_bound_init)
-            #     self.goal_randomize = True
+                self.goal_randomize = True
             # if self.episode_counter % self.obstacle_frequency == 0:
             #     self.obstacle_randomize = True
 
