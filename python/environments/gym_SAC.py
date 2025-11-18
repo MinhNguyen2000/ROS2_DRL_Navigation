@@ -8,7 +8,7 @@
 # ===================================================================
 # imports:
 from stable_baselines3 import SAC
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 from stable_baselines3.common.env_util import make_vec_env
 import torch
 
@@ -26,7 +26,8 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 # define initialization function:
 def init_model(hyperparameters : dict, 
-               reward_scale : dict = {str, float}):
+               reward_scale : dict = {str, float}, 
+               normalize : bool = False):
     # environment vectorization settings:
     n_proc = 24
 
@@ -41,6 +42,10 @@ def init_model(hyperparameters : dict,
                         vec_env_cls = SubprocVecEnv,
                         vec_env_kwargs = dict(start_method = "spawn"))
     
+    # wrap environments in a normalization wrapper:
+    if normalize:
+        env = VecNormalize(env, norm_obs = True, norm_reward = True, clip_obs = 10.0)
+
     # make the model:
     model = SAC(policy = hyperparameters["policy"],
                 env = env,
@@ -107,7 +112,8 @@ def train_model(model,
                 reward_scale : dict,
                 hyperparameters : dict,
                 number_of_runs : int = 100,
-                steps_per_run : int = 25000):
+                steps_per_run : int = 25000,
+                normalize : bool = False):
     # set the model saving frequency:
     model_save_freq = max(int(number_of_runs / 10), 1)
 
@@ -127,6 +133,11 @@ def train_model(model,
 
     # save the last model:
     model.save(os.path.join(results_path, f"run_{run}"))
+
+    # save the normalization stats, if normalize flag is True:
+    if normalize:
+        vec_norm_env = model.get_env()
+        vec_norm_env.save(os.path.join(results_path, "vec_norm_env_stats.pkl"))
 
     # save the result-params mapping into a json file:
     trial_to_param_path = os.path.join(base_path,'trial_to_param.json')
@@ -225,13 +236,14 @@ def objective_model_params(trial):
     return mean_eval_rew
 
 # main function:
-def main(do_studies : bool = False):
+def main(do_studies : bool = False,
+         normalize : bool = False):
     # set the tensorboard logging directory:
     dir_path = os.path.dirname(os.path.abspath(__file__))
     tensorboard_log_dir = os.path.join(dir_path, "results", "Nav2D_SAC_SB3_tensorboard")
 
     # set the training parameters:
-    number_of_runs = 1000
+    number_of_runs = 100
     steps_per_run = 50000
 
     # if not using optuna:
@@ -250,15 +262,15 @@ def main(do_studies : bool = False):
                            "gamma" : 0.99,
                            "actor_lr" : 3e-4,
                            "critic_lr" : 3e-4,
-                           "buffer_size" : int(2.5e6),
-                           "batch_size" : 4096,
+                           "buffer_size" : int(1e6),
+                           "batch_size" : 512,
                            "tau" : 5e-3,
-                           "ent_coef" : "auto_0.1",
+                           "ent_coef" : "auto",
                            "train_freq" : 2,
                            "learning_starts" : 0,
                            "target_update_interval" : 1,
-                           "gradient_steps" : 4,
-                           "target_entropy" : -2,
+                           "gradient_steps" : 2,
+                           "target_entropy" : "-2",
                            "action_noise" : None,
                            "verbose" : 0, 
                            "gpu" : True,
@@ -266,7 +278,8 @@ def main(do_studies : bool = False):
         
         # get the model and the environment:
         _, model = init_model(hyperparameters = hyperparameters, 
-                                reward_scale = reward_scale)
+                                reward_scale = reward_scale, 
+                                normalize = normalize)
         
         # train the model:
         train_model(model = model, 
@@ -274,7 +287,9 @@ def main(do_studies : bool = False):
                     reward_scale = reward_scale,
                     hyperparameters = hyperparameters,
                     number_of_runs = number_of_runs,
-                    steps_per_run = steps_per_run)
+                    steps_per_run = steps_per_run,
+                    normalize = normalize)
+            
 
     # if using optuna:
     else:
@@ -296,4 +311,5 @@ def main(do_studies : bool = False):
         study.optimize(objective_model_params, n_trials = 100)
 
 if __name__=="__main__":
-    main(do_studies = False)
+    main(do_studies = False, 
+         normalize = False)
