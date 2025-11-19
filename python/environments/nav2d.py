@@ -156,6 +156,9 @@ class Nav2D(MujocoEnv):
 
         # --- termination conditions
         self.distance_threshold = self.agent_radius
+        self.dist_progress_count = 0
+        self.head_progress_count = 0
+        self.progress_threshold = 100   # number of maximum allowable episodes where the agent has not made any progress toward the goal
         self.obstacle_threshold = 0.05 + self.agent_radius
 
         # --- scale of each reward
@@ -290,6 +293,10 @@ class Nav2D(MujocoEnv):
         # get the last angular difference:
         required_heading = self.get_heading(agent_pos=agent_pos, goal_pos=goal_pos)
         self.prev_abs_diff = abs((required_heading - qpos[2] % (2*np.pi) + np.pi) % (2*np.pi) - np.pi)
+
+        # reset the distance progress count
+        self.dist_progress_count = 0
+        self.head_progress_count = 0
         return ob
     
     def get_heading(self, 
@@ -437,7 +444,19 @@ class Nav2D(MujocoEnv):
         # find the absolute value of the difference in heading:
         abs_diff = np.abs((required_heading - wrapped_theta + np.pi) % (2 * np.pi) - np.pi)
         
-        term = distance_cond or obstacle_cond
+        
+        # when the agent has not reduced the d_goal for N steps, where N is 200
+        if d_goal > self.d_goal_last: 
+            self.dist_progress_count += 1
+        else:
+            self.dist_progress_count = 0
+
+        if abs_diff >= self.prev_abs_diff:
+            self.head_progress_count += 1
+        else:
+            self.head_progress_count = 0
+        
+        term = distance_cond or obstacle_cond or (self.dist_progress_count >= self.progress_threshold) or (self.head_progress_count >= self.progress_threshold)
         
         info = {}
         # 4. reward
