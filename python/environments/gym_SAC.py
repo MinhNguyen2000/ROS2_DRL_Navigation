@@ -26,7 +26,8 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 # define initialization function:
 def init_model(hyperparameters : dict, 
-               reward_scale : dict = {str, float}, 
+               reward_scale : dict = {str, float},
+               randomization_options : dict = {str, int},
                normalize : bool = False):
     # environment vectorization settings:
     n_proc = 24
@@ -38,7 +39,8 @@ def init_model(hyperparameters : dict,
     env = make_vec_env("Nav2D-v0",
                         n_envs = n_proc,
                         env_kwargs = {"max_episode_steps" : max_episode_steps,
-                                     "reward_scale_options" : reward_scale},
+                                     "reward_scale_options" : reward_scale,
+                                     "randomization_options" : randomization_options},
                         vec_env_cls = SubprocVecEnv,
                         vec_env_kwargs = dict(start_method = "spawn"))
     
@@ -110,6 +112,7 @@ def eval_policy(env: gym.Env,
 def train_model(model,
                 dir_path,
                 reward_scale : dict,
+                randomization_options : dict,
                 hyperparameters : dict,
                 number_of_runs : int = 100,
                 steps_per_run : int = 25000,
@@ -127,22 +130,28 @@ def train_model(model,
         # learn every run:
         model.learn(total_timesteps = steps_per_run, tb_log_name = f"{result_number}", reset_num_timesteps = False)
 
-        # save a model every now and then:
+        # set the run saving path:
+        run_dir = os.path.join(results_path, f"run_{run}")
+
+        # save a model + stats every now and then:
         if run % model_save_freq == 0:
-            model.save(os.path.join(results_path, f"run_{run}"))
+            # save things:
+            model.save(os.path.join(run_dir, f"run_{run}"))
+            vec_norm_env = model.get_env()
+            vec_norm_env.save(os.path.join(run_dir, "vec_norm_env_stats.pkl"))
 
     # save the last model:
-    model.save(os.path.join(results_path, f"run_{run}"))
+    model.save(os.path.join(run_dir, f"run_{run}"))
 
-    # save the normalization stats, if normalize flag is True:
+    # save the last normalization stats, if normalize flag is True:
     if normalize:
         vec_norm_env = model.get_env()
-        vec_norm_env.save(os.path.join(results_path, "vec_norm_env_stats.pkl"))
+        vec_norm_env.save(os.path.join(run_dir, "vec_norm_env_stats.pkl"))
 
     # save the result-params mapping into a json file:
     trial_to_param_path = os.path.join(base_path,'trial_to_param.json')
     if os.path.exists(trial_to_param_path):
-        with open(trial_to_param_path, "r") as f:
+        with open(trial_to_param_path, "r") as f:   
             data = json.load(f)
     else:
         data = {result_number: ""}
@@ -150,6 +159,7 @@ def train_model(model,
     hyperparam_codified = f"{hyperparameters["actor_lr"]}_{hyperparameters["critic_lr"]}_{hyperparameters["buffer_size"]}_{hyperparameters["batch_size"]}_{hyperparameters["tau"]}_{hyperparameters["gamma"]}_"
     hyperparam_codified += f"{hyperparameters["train_freq"]}_{hyperparameters["gradient_steps"]}_{hyperparameters["ent_coef"]}_{hyperparameters["target_update_interval"]}_{hyperparameters["target_entropy"]}_"
     hyperparam_codified += f"{reward_scale['rew_head_scale']}_{reward_scale["rew_head_approach_scale"]}_{reward_scale['rew_dist_scale']}_{reward_scale['rew_goal_scale']}_{reward_scale['rew_obst_scale']}"
+    hyperparam_codified += f"{randomization_options['agent_freq']}_{randomization_options["goal_freq"]}_{randomization_options["obstacle_freq"]}"
 
     timestamp = datetime.now().strftime("%y%m%d_%H%M")
     hyperparam_codified_time = f"{timestamp}_" + hyperparam_codified
@@ -243,7 +253,7 @@ def main(do_studies : bool = False,
     tensorboard_log_dir = os.path.join(dir_path, "results", "Nav2D_SAC_SB3_tensorboard")
 
     # set the training parameters:
-    number_of_runs = 100
+    number_of_runs = 500
     steps_per_run = 50000
 
     # if not using optuna:
@@ -256,6 +266,10 @@ def main(do_studies : bool = False,
                         "rew_goal_scale" : 5000.0,
                         "rew_obst_scale" : -1000.0, 
                         "rew_time" : -0.25}
+        
+        randomization_options = {"agent_freq" : 1,
+                         "goal_freq" : 25,
+                         "obstacle_freq" : 1}
         
         # model hyperparameters:
         hyperparameters = {"policy" : "MlpPolicy",
@@ -278,19 +292,20 @@ def main(do_studies : bool = False,
         
         # get the model and the environment:
         _, model = init_model(hyperparameters = hyperparameters, 
-                                reward_scale = reward_scale, 
+                                reward_scale = reward_scale,
+                                randomization_options = randomization_options,
                                 normalize = normalize)
         
         # train the model:
         train_model(model = model, 
                     dir_path = dir_path,
                     reward_scale = reward_scale,
+                    randomization_options = randomization_options,
                     hyperparameters = hyperparameters,
                     number_of_runs = number_of_runs,
                     steps_per_run = steps_per_run,
                     normalize = normalize)
             
-
     # if using optuna:
     else:
         # # set the study parameters:
@@ -312,4 +327,4 @@ def main(do_studies : bool = False,
 
 if __name__=="__main__":
     main(do_studies = False, 
-         normalize = False)
+         normalize = True)
