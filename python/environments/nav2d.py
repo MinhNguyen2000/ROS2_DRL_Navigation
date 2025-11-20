@@ -82,10 +82,6 @@ class Nav2D(MujocoEnv):
         self.goal_bound_init = 0
         self.goal_bound_final = self.size - 2*self.agent_radius
         self.goal_bound = self.goal_bound_init
-        self.eps_at_init_bound = 100
-        self.eps_grow_rate = 80
-        self.eps_at_current_goal = 0
-        self.num_goal_rand = 0
         
         # --- define the uninitialized location of the agent and the target
         # self._agent_loc = self.np_random.uniform(size=2, low=-self.agent_bound_init, high=self.agent_bound_init)
@@ -154,7 +150,7 @@ class Nav2D(MujocoEnv):
         self.distance_threshold = self.agent_radius
         self.dist_progress_count = 0
         self.head_progress_count = 0
-        self.progress_threshold = 100   # number of maximum allowable episodes where the agent has not made any progress toward the goal
+        self.progress_threshold = 200   # number of maximum allowable episodes where the agent has not made any progress toward the goal
         self.obstacle_threshold = 0.05 + self.agent_radius
 
         # --- scale of each reward
@@ -215,6 +211,9 @@ class Nav2D(MujocoEnv):
 
         self.action_space = gym.spaces.Box(low=self.action_low, high=self.action_high, dtype=np.float32)
         return self.action_space
+    
+    def _set_goal_bound(self, ratio: float):
+        self.goal_bound = ratio * self.goal_bound_final
     
     def _get_obs(self):
         ''' internal method to obtain the location of agent/goal and the simulated LiDAR scan at any instance 
@@ -331,19 +330,9 @@ class Nav2D(MujocoEnv):
             if self.episode_counter == 1 or self.episode_counter % self.agent_frequency == 0:
                 self.agent_randomize = True
 
-            # goal randomization
-            self.eps_at_current_goal += 1
-            if self.eps_at_current_goal >= self.goal_frequency:
+            # goal randomization, with goal bound increase handled externally
+            if self.episode_counter % self.goal_frequency == 0:
                 self.goal_randomize = True
-                self.eps_at_current_goal = 0
-                self.num_goal_rand += 1
-                # print(f"eps: {self.episode_counter} | num_goal_rand {self.num_goal_rand}")
-            
-            # goal bound growth
-            if self.num_goal_rand >= (self.eps_grow_rate * self.goal_bound / self.goal_bound_final + self.eps_at_init_bound) / self.goal_frequency:
-                self.goal_bound = min(self.goal_bound + 0.25 * self.goal_bound_final, self.goal_bound_final)
-                print(f"ep {self.episode_counter:5d} | goal bound {self.goal_bound:5.4f}")
-                self.num_goal_rand = 0
 
             # if self.episode_counter % self.obstacle_frequency == 0:
             #     self.obstacle_randomize = True
@@ -355,7 +344,7 @@ class Nav2D(MujocoEnv):
             self.agent_bound = self.agent_bound_final
             self.goal_bound = self.goal_bound_final
             ob = self.reset_model(agent_randomize=True,
-                                  goal_randomize=True,
+                                  goal_randomize=False,
                                   obstacle_randomize=True)
 
         # # reset flags:
@@ -501,7 +490,7 @@ class Nav2D(MujocoEnv):
             # print to user:
             if self.render_mode == "human":
                 print(f" @ episode {self.episode_counter} | vel: {action_rot.round(3)} | rew_head: {self.rew_head_scaled:.4f} | rew_head_approach: {self.rew_head_approach_scaled:.4f} | rew_dist: {self.rew_dist_scaled:.4f} | rew_dist_approach: {self.rew_dist_approach_scaled:.4f} | total: {rew:.5f}                                                                              ", end="\r")
-            info = {"rew_head": self.rew_head_scaled, "rew_head_approach" : self.rew_head_approach_scaled, "rew_dist_approach" : self.rew_dist_approach_scaled}
+            # info = {"rew_head": self.rew_head_scaled, "rew_head_approach" : self.rew_head_approach_scaled, "rew_dist_approach" : self.rew_dist_approach_scaled}
 
         # advance d_goal history:
         self.d_goal_last = d_goal
@@ -510,6 +499,8 @@ class Nav2D(MujocoEnv):
         # 5. info (optional):
         # info = {"reward": rew, "dist_cond": distance_cond, "obst_cond": obstacle_cond}
         # info = {}
+        if term:
+            info["is_success"] = bool(distance_cond)
         
         # 6. render if render_mode human:
         if self.render_mode == "human":

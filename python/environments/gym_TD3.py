@@ -8,8 +8,9 @@
 # ===================================================================
 
 from stable_baselines3 import TD3,SAC
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecNormalize
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.callbacks import BaseCallback
 
 import torch
 import gymnasium as gym
@@ -20,6 +21,7 @@ import numpy as np
 import os, re, json, time
 from datetime import datetime
 from tqdm import tqdm
+from collections import deque
 
 # Ignore User Warnings (for creating a new folder to save policies)
 import warnings
@@ -61,6 +63,47 @@ def main():
             eval_rew_hist.append(eval_rew)
 
         return np.mean(eval_rew_hist).round(3)
+
+    class CurriculumCallback(BaseCallback):
+        def __init__(self, success_window = 50, threshold = 0.7):
+            super().__init__()
+            self.success_threshold = threshold
+            self.success_window = success_window
+            self.buffer = deque(maxlen=success_window)
+            self.goal_bound_levels = np.linspace(0,1,5)
+            self.goal_level_idx = 0
+
+        def _on_step(self) -> bool:
+            # grab info dict from each parallel env
+            infos = self.locals["infos"]
+
+            for info in infos:
+                if "is_success" in info:        # check if terminal state in each env
+                    self.buffer.append(info["is_success"])
+
+            if len(self.buffer) >= self.success_window:
+                success_rate = sum(self.buffer)/len(self.buffer)
+                # print(f" Current training success {success_rate:3.2f}", end="\r")
+
+                # if the success rate of the past N episodes exceed success threshold, progress with curriculum for all env
+                if success_rate > self.success_threshold:
+                    self.increase_goal_bound()
+                    self.buffer.clear()
+
+            return True     # to continue training, return True, else return False
+    
+        def increase_goal_bound(self):
+            env = self.model.get_env()  # vecnormalized wrapped vec env
+            vec = env.venv              # unwrap to vec env
+            self.goal_level_idx += 1
+            print(f"\nIncreasing goal bound - level {self.goal_level_idx:2d}")
+            self.goal_level_idx = min(self.goal_level_idx, len(self.goal_bound_levels) - 1)
+
+            vec.env_method("_set_goal_bound", self.goal_bound_levels[self.goal_level_idx])
+
+            # # Optional debug
+            # vals = vec.get_attr("goal_bound")
+            # print("\nUpdated bounds:", vals)
 
     def objective_rew_scale(trial):
         rew_head_scale          = trial.suggest_float("rew_head_scale",     low=5.0,    high=15.0,  step=0.5)
@@ -471,7 +514,6 @@ def main():
                                     direction='maximize')
         study.optimize(objective_rand_freq, n_trials=100)
 
-
     def train():
         reward_scale= {
                 "rew_head_scale": 14.5,
@@ -482,18 +524,15 @@ def main():
                 "rew_goal_scale": 5_000.0,
                 "rew_obst_scale": -1_000.0
             }
+        
+        randomization_options = {
+                "agent_freq": 1,
+                "goal_freq": 5
+            }
 
         # Environment vectorization
         n_proc = 24
     
-        print("Making subprocess vectorized environments!")
-        env = make_vec_env("Nav2D-v0", 
-                            n_envs=n_proc, 
-                            env_kwargs={"max_episode_steps": 1_000,
-                                        "reward_scale_options": reward_scale
-                                        },
-                            vec_env_cls=SubprocVecEnv, 
-                            vec_env_kwargs=dict(start_method='forkserver'))
 
         # Hyperparameters
         learning_rate = 5e-4
@@ -519,6 +558,18 @@ def main():
                         net_arch=dict(pi=pi_arch, qf=qf_arch))
         use_custom_policy = False
         cuda_enabled = True
+
+        print("Making subprocess vectorized environments!")
+        env = make_vec_env("Nav2D-v0", 
+                            n_envs=n_proc, 
+                            env_kwargs={"max_episode_steps": 1_000,
+                                        "reward_scale_options": reward_scale,
+                                        "randomization_options": randomization_options
+                                        },
+                            vec_env_cls=SubprocVecEnv, 
+                            vec_env_kwargs=dict(start_method='forkserver'))
+        
+        env = VecNormalize(env, training=True, norm_obs=True, norm_reward=True, gamma=gamma)
         
         # Create the model
         model = TD3("MlpPolicy", env, 
@@ -542,7 +593,7 @@ def main():
         
         # Training code
         # run parameters:
-        number_of_runs = 250
+        number_of_runs = 500
         steps_per_run = 20_000
         models_to_save = 10
         model_save_freq = int(number_of_runs / models_to_save)
@@ -552,18 +603,27 @@ def main():
         result_number = f"result_{len(os.listdir(base_path)):05d}"
         results_path = os.path.join(base_path, result_number)
 
+        curriculum_callback = CurriculumCallback(success_window=100, threshold=0.7)
+
         # using model.learn approach:
         for run in tqdm(range(1,number_of_runs+1), ncols = 100, colour = "#33FF00", desc = f"{result_number} training progress"):
             # learn every run:
-            model.learn(total_timesteps = steps_per_run, tb_log_name=f"{result_number}",reset_num_timesteps = False)
-            # model.learn(total_timesteps = steps_per_run, reset_num_timesteps = False)
+            model.learn(total_timesteps = steps_per_run, 
+                        tb_log_name=f"{result_number}",
+                        reset_num_timesteps = False,
+                        callback=curriculum_callback)
 
-            # save a model once in a while
+            # save a model and the normalization stats once in a while
             if run % model_save_freq == 0:
                 model.save(os.path.join(results_path, f"run_{run}"))
+                vec_norm_env = model.get_env()
+                vec_norm_env.save(os.path.join(results_path, f"norm_stats_{run}.pkl"))
+                
 
         # save the last model
         model.save(os.path.join(results_path, f"run_{run}"))
+        vec_norm_env = model.get_env()
+        vec_norm_env.save(os.path.join(results_path, f"norm_stats_{run}.pkl"))
 
         # close environment when done:
         env.close()
