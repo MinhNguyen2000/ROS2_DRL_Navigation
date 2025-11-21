@@ -6,7 +6,7 @@ import numpy as np
 import gymnasium as gym
 import mujoco as mj
 from gymnasium.envs.mujoco import MujocoEnv
-from gymnasium.envs.registration import register
+from gymnasium.envs.registration import registry, register
 
 import os, json
 from model_creation import MakeEnv
@@ -344,7 +344,7 @@ class Nav2D(MujocoEnv):
             self.agent_bound = self.agent_bound_final
             self.goal_bound = self.goal_bound_final
             ob = self.reset_model(agent_randomize=True,
-                                  goal_randomize=False,
+                                  goal_randomize=True,
                                   obstacle_randomize=True)
 
         # # reset flags:
@@ -473,7 +473,7 @@ class Nav2D(MujocoEnv):
             self.rew_head_approach_scaled = self.rew_head_approach_scale * rew_head_approach
 
             #--- TIME REWARD:
-            rew_time = -0.05    # going to keep this very small relative to the reward scale
+            rew_time = self.rew_time    # going to keep this very small relative to the reward scale
 
             #--- DISTANCE REWARD:
             # this reward term incentivizes closing the distance between the agent and the goal:
@@ -508,8 +508,11 @@ class Nav2D(MujocoEnv):
 
         return nobs, rew, term, False, info
 
-register(
-    id="Nav2D-v0",
-    entry_point="nav2d:Nav2D",
-    max_episode_steps=1_000,
-)
+ENV_ID = "Nav2D-v0"
+
+if ENV_ID not in gym.envs.registry:
+    register(
+        id=ENV_ID,
+        entry_point="nav2d:Nav2D",
+        max_episode_steps=1_000,
+    )
