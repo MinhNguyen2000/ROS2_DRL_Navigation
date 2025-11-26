@@ -55,7 +55,7 @@ class Nav2D(MujocoEnv):
 
         self.episode_counter = 0
         self.agent_frequency    = randomization_options.get("agent_freq", 1)    if randomization_options else 1
-        self.goal_frequency     = randomization_options.get("goal_freq", 5)    if randomization_options else 5
+        self.goal_frequency     = randomization_options.get("goal_freq", 1)    if randomization_options else 1
         self.obstacle_frequency = randomization_options.get("obstacle_freq", 1) if randomization_options else 1
 
         self.agent_randomize = False
@@ -73,7 +73,7 @@ class Nav2D(MujocoEnv):
         scaled_inner_length = 2 * (self.size - self.agent_radius)
         self.dmax = np.sqrt(2 * scaled_inner_length ** 2, dtype = np.float32)
 
-        # # --- randomization bounds
+        # --- randomization bounds
         self.angle_bound = np.pi
 
         self.agent_bound_final = self.size - self.agent_radius
@@ -145,7 +145,6 @@ class Nav2D(MujocoEnv):
         self.agent_id = self.model.body("agent").id
         self.goal_id = self.model.body("goal").id
 
-
         # --- termination conditions
         self.distance_threshold = self.agent_radius
         self.dist_progress_count = 0
@@ -160,7 +159,7 @@ class Nav2D(MujocoEnv):
         self.rew_dist_approach_scale    = reward_scale_options.get("rew_dist_approach_scale", 100)  if reward_scale_options else 100
         self.rew_goal_scale             = reward_scale_options.get("rew_goal_scale", 5000)          if reward_scale_options else 5000
         self.rew_obst_scale             = reward_scale_options.get("rew_obst_scale", -1000)         if reward_scale_options else -1000
-        self.rew_time                   = reward_scale_options.get("rew_time", -0.05)               if reward_scale_options else -0.05
+        self.rew_time                   = reward_scale_options.get("rew_time", -0.25)               if reward_scale_options else -0.25
 
         # --- intialize reward components
         self.rew_head_scaled = 0
@@ -248,7 +247,7 @@ class Nav2D(MujocoEnv):
         noise_high = 0.1
 
         # get a copy of the initial_qpos
-        qpos = np.copy(self.init_qpos)      # initially agent is at [0,0], goal is at [-0.5, -0.5]
+        qpos = np.copy(self.init_qpos)      # initially agent is at [0.0, 0.0], goal is at [0.0, 0.0]
         qvel = np.copy(self.init_qvel)
 
         # if it is time to randomize the goal:
@@ -331,8 +330,8 @@ class Nav2D(MujocoEnv):
                 self.agent_randomize = True
 
             # goal randomization, with goal bound increase handled externally
-            if self.episode_counter % self.goal_frequency == 0:
-                self.goal_randomize = True
+            # if self.episode_counter % self.goal_frequency == 0:
+            #     self.goal_randomize = True
 
             # if self.episode_counter % self.obstacle_frequency == 0:
             #     self.obstacle_randomize = True
@@ -351,9 +350,6 @@ class Nav2D(MujocoEnv):
         self.agent_randomize = False
         self.goal_randomize = False
         self.obstacle_randomize = False
-
-        # form observation:
-        ob = self.reset_model()
 
         # render if mode == "human":
         if self.render_mode == "human":
@@ -434,7 +430,6 @@ class Nav2D(MujocoEnv):
         # find the absolute value of the difference in heading:
         abs_diff = np.abs((required_heading - wrapped_theta + np.pi) % (2 * np.pi) - np.pi)
         
-        
         # when the agent has not reduced the d_goal for N steps, where N is 200
         if d_goal > self.d_goal_last: 
             self.dist_progress_count += 1
@@ -449,7 +444,7 @@ class Nav2D(MujocoEnv):
         term = distance_cond or obstacle_cond or (self.dist_progress_count >= self.progress_threshold) or (self.head_progress_count >= self.progress_threshold)
         
         info = {}
-        # 4. reward
+        # 4. reward:
         if distance_cond:
             rew = self.rew_goal_scale
         elif obstacle_cond:
@@ -457,13 +452,23 @@ class Nav2D(MujocoEnv):
         else:
             #---  BASE HEADING REWARD:
             # penalize based on the absolute difference in heading:
-            rew_head = 1.0 - np.tanh(3 * abs_diff / np.pi)
+            # rew_head = 1.0 - np.tanh(3 * abs_diff / np.pi)        # old rew_head value is this
+            rew_head = 1.0 - np.tanh(3 * abs_diff)
 
-            # bonus reward for being within +/- 5 degree of the desired trajectory:
-            angle_threshold = 2.5
+            # # bonus reward for being within +/- 5 degree of the desired trajectory:       # old bonus reward is this
+            # angle_threshold = 2.5
+            # angle_threshold_rad = angle_threshold / 180 * np.pi
+            # if abs_diff <= angle_threshold_rad:
+            #     rew_head += 1 - 1 / angle_threshold_rad * abs_diff
+
+            # bonus for approaching while aligned:
+            angle_threshold = 15
             angle_threshold_rad = angle_threshold / 180 * np.pi
             if abs_diff <= angle_threshold_rad:
-                rew_head += 1 - 1 / angle_threshold_rad * abs_diff
+                rew_dist_approach = max((self.d_goal_last - d_goal), 0)
+                self.rew_dist_approach_scaled = rew_dist_approach * self.rew_dist_approach_scale
+            else:
+                self.rew_dist_approach_scaled = 0
 
             # scale reward:
             self.rew_head_scaled = self.rew_head_scale * rew_head
@@ -477,7 +482,8 @@ class Nav2D(MujocoEnv):
 
             #--- DISTANCE REWARD:
             # this reward term incentivizes closing the distance between the agent and the goal:
-            rew_dist = 1 - np.tanh(5 * d_goal / self.dmax)
+            # rew_dist = 1 - np.tanh(5 * d_goal / self.dmax)    # old value of rew_dist is this
+            rew_dist = 1 - np.tanh(d_goal)
             self.rew_dist_scaled = self.rew_dist_scale * rew_dist
 
             #--- DISTANCE APPROACH REWARD:
@@ -485,11 +491,13 @@ class Nav2D(MujocoEnv):
             self.rew_dist_approach_scaled = rew_dist_approach * self.rew_dist_approach_scale
 
             #--- TOTAL REWARD TERM:
-            rew = self.rew_head_scaled + self.rew_head_approach_scaled + self.rew_dist_scaled + self.rew_dist_approach_scaled + rew_time
+            # rew = self.rew_head_scaled + self.rew_head_approach_scaled + self.rew_dist_scaled + self.rew_dist_approach_scaled + rew_time  # old value of rew is this
+            rew = self.rew_head_scaled +  self.rew_dist_scaled + self.rew_dist_approach_scaled + rew_time 
 
             # print to user:
             if self.render_mode == "human":
-                print(f" @ episode {self.episode_counter} | vel: {action_rot.round(3)} | rew_head: {self.rew_head_scaled:.4f} | rew_head_approach: {self.rew_head_approach_scaled:.4f} | rew_dist: {self.rew_dist_scaled:.4f} | rew_dist_approach: {self.rew_dist_approach_scaled:.4f} | total: {rew:.5f}                                                                              ", end="\r")
+                # print(f" @ episode {self.episode_counter} | vel: {action_rot.round(3)} | rew_head: {self.rew_head_scaled:.4f} | rew_head_approach: {self.rew_head_approach_scaled:.4f} | rew_dist: {self.rew_dist_scaled:.4f} | rew_dist_approach: {self.rew_dist_approach_scaled:.4f} | total: {rew:.5f}                                                                              ", end="\r")
+                 print(f" @ episode {self.episode_counter} | rew_head: {self.rew_head_scaled:.4f} | rew_dist: {self.rew_dist_scaled:.4f} | rew_dist_approach: {self.rew_dist_approach_scaled:.4f} | total: {rew:.5f}                                                                              ", end="\r")
             # info = {"rew_head": self.rew_head_scaled, "rew_head_approach" : self.rew_head_approach_scaled, "rew_dist_approach" : self.rew_dist_approach_scaled}
 
         # advance d_goal history:
