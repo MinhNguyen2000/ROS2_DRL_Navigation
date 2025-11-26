@@ -179,25 +179,29 @@ class Nav2D(MujocoEnv):
         ''' internal method to set the bounds on the observation space
         
         Order of the bounds
-            (3, ): agents's x, y, z joint positions, where x and y are bounded by the arena size
-            (3, ): agent's x, y, z joint velocities
-            (2, ): goal's x + y body positions, where x and y are bounded by the arena size
+            (2, ): the relative position between the agent and the goal in delta_x and delta_y,
+            (2, ): agents's local heading in sin(theta) and cos(theta), normalized to [-1,1]
+            (3, ): agent's x-linear, y-linear, and z-angular joint velocities
             (n_rays, ): LiDAR scans'''
         # define the obs_space_size:
-        self._obs_space_size = 3 + 3 + 2 + self.n_rays
+        self._obs_space_size = 2 + 2 + 3 + self.n_rays
 
         # set the scale on the observation space:
         # initialize the bounds as [-1, +1] scaled by some amount:
         low = -np.ones((self._obs_space_size,),dtype=np.float32) * self.dmax
         high = np.ones((self._obs_space_size,),dtype=np.float32) * self.dmax
         
-        # set the x-y bounds of the agent and goal as half the arena size
-        low[[0, 1, 6, 7]] = -(self.size - self.agent_radius)
-        high[[0, 1, 6, 7]] = self.size - self.agent_radius
+        # # set the dekta_x & delta_y bounds of the agent and goal as half the arena size
+        # low[[0, 1, 6, 7]] = -(self.size - self.agent_radius)
+        # high[[0, 1, 6, 7]] = self.size - self.agent_radius
+        low[[0, 1]] = -2*(self.size - self.agent_radius)
+        high[[0, 1]] = 2*(self.size - self.agent_radius)
 
-        # set the angular bounds:
-        low[2] = 0.0
-        high[2] = 2*np.pi
+        # # set the angular bounds:
+        # low[2] = 0.0
+        # high[2] = 2*np.pi
+        low[[2, 3]] = -1
+        high[[2, 3]] = 1
 
         self.observation_space = gym.spaces.Box(
             low=low,        # [x_min, y_min, target_x_min, target_y_min]
@@ -223,26 +227,20 @@ class Nav2D(MujocoEnv):
     def _get_obs(self):
         ''' internal method to obtain the location of agent/goal and the simulated LiDAR scan at any instance 
         
-        Returns:
-            tuple:
-                a tuple containing the agent observation, goal observation, and LiDAR scan
-
-                1. ``agent_obs``:  a stacked (6,) np.ndarray with the following components
-                                    ``agent_pos`` (2,) - the global position of the agent (to compare to the global goal postion)
-                                    ``agent_heading`` (1, ) - the local heading of the agent (w.r.t the agent's starting coordinate frame)
-                                    ``agent_vel`` (3,) - the local velocities of the agent (w.r.t the agent's starting coordinate frame)
-                
-                2. ``goal_obs``:   a (3,) np.ndarray with the x-y-z position of the goal in the global frame
-
-                3. ``lidar_obs``:  a np.ndarray with the LiDAR reading(s)
+        Returns: obs_buffer containing
+            (2, ): relative position between the agent and the goal in delta_x and delta_y TODO - normalize these observations
+            (2, ): agent's local heading in sin(theta) and cos(theta), normalized to [-1,1]
+            (3, ): agent's joint velocities TODO - Normalize the agent's velocities somehow
+            (n_rays, ): normalized LiDAR scans
         '''
 
         #--- modify obs buffer inplace instead of concatenation overhead (time + memory)
-        self._obs_buffer[0:2] = self.data.xpos[self.agent_id][:2]
-        self._obs_buffer[2] = self.data.qpos[2]
-        self._obs_buffer[3:6] = self.data.qvel[0:3]
-        self._obs_buffer[6:8] = self.data.xpos[self.goal_id][:2]
-        self._obs_buffer[8:] = self.data.sensordata[:-1]
+        self._obs_buffer[:2] = (self.data.xpos[self.goal_id][:2] - self.data.xpos[self.agent_id][:2])     # delta_x, delta_y
+        self._obs_buffer[2] = np.sin(self.data.qpos[2])
+        self._obs_buffer[3] = np.cos(self.data.qpos[2])
+        self._obs_buffer[4:7] = self.data.qvel[0:3]
+        self._obs_buffer[7:] = self.data.sensordata[:-1]            # LiDAR scans
+
         return self._obs_buffer
     
     def _get_heading(self, 
@@ -307,12 +305,17 @@ class Nav2D(MujocoEnv):
         ob = self._get_obs() 
 
         # get initial agent-goal distance
-        agent_pos = ob[0:2]
-        goal_pos = ob[6:8]
-        self.d_goal_last = self._get_l2_distance(agent_pos, goal_pos)
+        # agent_pos = ob[0:2]
+        # goal_pos = ob[6:8]
+        # self.d_goal_last = self._get_l2_distance(agent_pos, goal_pos)
+
+        delta_x, delta_y = ob[:2]
+        self.d_goal_last = np.sqrt(delta_x**2 + delta_y**2)     # to track distance approach progress
+        self.d_init = self.d_goal_last                          # to track overall distance progress
 
         # get the last angular difference:
-        required_heading = self.get_heading(agent_pos=agent_pos, goal_pos=goal_pos)
+        # required_heading = self._get_heading(agent_pos=agent_pos, goal_pos=goal_pos)
+        required_heading = np.arctan2(delta_y, delta_x, dtype=np.float32) % (2*np.pi)
         self.prev_abs_diff = abs((required_heading - qpos[2] % (2*np.pi) + np.pi) % (2*np.pi) - np.pi)
 
         # reset the distance progress count
@@ -411,23 +414,27 @@ class Nav2D(MujocoEnv):
         # 2. collect the new observation (LiDAR simulation, location of agent/goal using the custom _get_obs())\
         nobs = self._get_obs()
         # TODO - How can I make this more robust to future changes
-        agent_pos = nobs[0:2]
-        goal_pos = nobs[6:8]
-        lidar_obs = nobs[8:]
+        # agent_pos = nobs[0:2]
+        # goal_pos = nobs[6:8]
+        # theta = nobs[2]                 # use value of theta AFTER stepping:
 
-        # use value of theta AFTER stepping:
-        theta = nobs[2]
-
+        delta_x, delta_y  = nobs[:2]
+        sin_theta, cos_theta = nobs[2:4]
+        theta = np.arctan2(sin_theta, cos_theta, dtype=np.float32)
+        lidar_obs = nobs[7:]
+        
         # 3. termination condition: 
         # when the agent is close to the goal:
-        d_goal = self._get_l2_distance(agent_pos, goal_pos)
+        # d_goal = self._get_l2_distance(agent_pos, goal_pos)
+        d_goal = np.sqrt(delta_x**2 + delta_y**2)
         distance_cond = d_goal < self.distance_threshold
 
         # when the agent is close to obstacles:
         obstacle_cond = np.min(lidar_obs) < self.obstacle_threshold
 
         # get the difference in positions:
-        required_heading = self.get_heading(agent_pos, goal_pos) 
+        # required_heading = self._get_heading(agent_pos, goal_pos) 
+        required_heading = np.arctan2(delta_y, delta_x, dtype=np.float32) % (2 * np.pi)
 
         # wrap the current agent position between 0 and 2pi:
         wrapped_theta = theta % (2*np.pi)
@@ -441,7 +448,8 @@ class Nav2D(MujocoEnv):
         else:
             self.dist_progress_count = 0
 
-        if abs_diff >= self.prev_abs_diff:
+        # when the abs_diff is more than 15 degress and still growing
+        if abs_diff >= self.prev_abs_diff and (abs_diff > (15 / 180 * np.pi)):
             self.head_progress_count += 1
         else:
             self.head_progress_count = 0
