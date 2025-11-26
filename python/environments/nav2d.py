@@ -42,6 +42,10 @@ class Nav2D(MujocoEnv):
             height:                 height of the rendering window
             camera_id:              id of the default camera in the rendering window
             camera_name:            name of the default camera in the rendering window
+            reward_scale_options:   a dictionary containing the value for each of the reward scale (dist, dist_app, head, head_app, and time)
+            randomization_options:  a dictionary containing the randomization frequency of the agent, goal, and obstacles
+            visual_options:         arguments to pass to the MuJoCo renderer to enable/disable visual elements (actuator axes, LiDAR rays)
+            is_eval:                whether the environment is in evaluation mode, which alters the randomization scheme
         '''
 
         """ Observation and Action Spaces """
@@ -53,15 +57,6 @@ class Nav2D(MujocoEnv):
         self.frame_skip = frame_skip
         self.n_rays = 8
 
-        self.episode_counter = 0
-        self.agent_frequency    = randomization_options.get("agent_freq", 1)    if randomization_options else 1
-        self.goal_frequency     = randomization_options.get("goal_freq", 1)    if randomization_options else 1
-        self.obstacle_frequency = randomization_options.get("obstacle_freq", 1) if randomization_options else 1
-
-        self.agent_randomize = False
-        self.goal_randomize = False
-        self.obstacle_randomize = False
-
         # --- load the simulation parameters
         dir_path = os.path.dirname(os.path.abspath(__file__))
         json_path = os.path.join(dir_path,json_file)
@@ -72,16 +67,6 @@ class Nav2D(MujocoEnv):
 
         scaled_inner_length = 2 * (self.size - self.agent_radius)
         self.dmax = np.sqrt(2 * scaled_inner_length ** 2, dtype = np.float32)
-
-        # --- randomization bounds
-        self.angle_bound = np.pi
-
-        self.agent_bound_final = self.size - self.agent_radius
-        self.agent_bound = self.agent_bound_final
-
-        self.goal_bound_init = 0
-        self.goal_bound_final = self.size - 2*self.agent_radius
-        self.goal_bound = self.goal_bound_init
         
         # --- define the uninitialized location of the agent and the target
         # self._agent_loc = self.np_random.uniform(size=2, low=-self.agent_bound_init, high=self.agent_bound_init)
@@ -99,27 +84,27 @@ class Nav2D(MujocoEnv):
         self.model.vis.global_.offheight = height
         self.data = mj.MjData(self.model)
 
-        # --- define the observation space
+        # --- OBSERVATION SPACE INITIALIZATION
         self._set_observation_space()
         
         #--- pre allocate observation array once
         self._obs_buffer = np.zeros(self._obs_space_size, dtype = np.float32)
         
-        # --- define the action space
+        # --- ACTION SPACE INITIALIZATION
         self._set_action_space()
 
         self.init_qpos = self.data.qpos.ravel().copy()
         self.agent_init = np.zeros(3)
         self.init_qvel = self.data.qvel.ravel().copy()
 
-        # --- initialize the renderer
+        # --- RENDERER INITIALIZATION
         if "render_fps" in self.metadata:
             assert (
                 int(np.round(1.0 / self.dt)) == self.metadata["render_fps"]
             ), f'Expected value: {int(np.round(1.0 / self.dt))}, Actual value: {self.metadata["render_fps"]}'
 
-        # Delay creating the heavy renderer object until it's actually needed.
-        # Avoid mutable default args by normalizing visual_options here.
+        # delay creating the heavy renderer object until it's actually needed.
+        # avoid mutable default args by normalizing visual_options here.
         from gymnasium.envs.mujoco.mujoco_rendering import MujocoRenderer
 
         self._visual_options = {} if visual_options is None else visual_options
@@ -145,14 +130,34 @@ class Nav2D(MujocoEnv):
         self.agent_id = self.model.body("agent").id
         self.goal_id = self.model.body("goal").id
 
-        # --- termination conditions
+        # --- RANDOMIZATION INITIALIZATION
+        self.episode_counter = 0
+        self.agent_frequency    = randomization_options.get("agent_freq", 1)    if randomization_options else 1
+        self.goal_frequency     = randomization_options.get("goal_freq", 1)    if randomization_options else 1
+        self.obstacle_frequency = randomization_options.get("obstacle_freq", 1) if randomization_options else 1
+
+        self.agent_randomize = False
+        self.goal_randomize = False
+        self.obstacle_randomize = False
+
+        # agent randomization bounds
+        self.agent_bound_final = self.size - self.agent_radius
+        self.agent_bound = self.agent_bound_final
+        self.angle_bound = np.pi
+
+        # goal randomization bounds
+        self.goal_bound_init = 0
+        self.goal_bound_final = self.size - 2*self.agent_radius
+        self.goal_bound = self.goal_bound_init
+
+        # --- TERMINATION CONDITION INITILIZATION
         self.distance_threshold = self.agent_radius
         self.dist_progress_count = 0
         self.head_progress_count = 0
-        self.progress_threshold = 200   # number of maximum allowable episodes where the agent has not made any progress toward the goal
+        self.progress_threshold = 100   # number of maximum allowable episodes where the agent has not made any progress toward the goal
         self.obstacle_threshold = 0.05 + self.agent_radius
 
-        # --- scale of each reward
+        # --- REWARD SCALE INITIALIZATION
         self.rew_head_scale             = reward_scale_options.get("rew_head_scale", 1)             if reward_scale_options else 1
         self.rew_head_approach_scale    = reward_scale_options.get("rew_head_approach_scale", 100)  if reward_scale_options else 100
         self.rew_dist_scale             = reward_scale_options.get("rew_dist_scale", 1)             if reward_scale_options else 1
@@ -161,7 +166,7 @@ class Nav2D(MujocoEnv):
         self.rew_obst_scale             = reward_scale_options.get("rew_obst_scale", -1000)         if reward_scale_options else -1000
         self.rew_time                   = reward_scale_options.get("rew_time", -0.25)               if reward_scale_options else -0.25
 
-        # --- intialize reward components
+        # intialize the scaled reward components
         self.rew_head_scaled = 0
         self.rew_head_approach_scaled = 0
         self.rew_dist_scaled = 0
@@ -212,6 +217,7 @@ class Nav2D(MujocoEnv):
         return self.action_space
     
     def _set_goal_bound(self, ratio: float):
+        """ internal method to control the active goal randomization boundary """
         self.goal_bound = ratio * self.goal_bound_final
     
     def _get_obs(self):
@@ -239,6 +245,28 @@ class Nav2D(MujocoEnv):
         self._obs_buffer[8:] = self.data.sensordata[:-1]
         return self._obs_buffer
     
+    def _get_heading(self, 
+                agent_pos: list, 
+                goal_pos: list):
+        # this internal method gets the heading based on an agent_pos and a goal_pos
+        diff = goal_pos - agent_pos
+
+        # heading:
+        heading = np.arctan2(diff[1], diff[0], dtype = np.float32) % (2*np.pi)
+
+        return heading
+    
+    def _get_l2_distance(self, point_a: Sequence, point_b: Sequence):
+        ''' internal method to obtain the Cartesian (l_2) distance between two points in 2D space
+        
+        Arguments:
+            point_a:    a list or sequence containing at least the x-y coordinates of the first point
+            point_b:    a list or sequence containing at least the x-y coordinates of the second point
+        Returns:
+            the 2-D Cartesian distance between the two points
+        '''
+        return np.linalg.norm(point_a[0:2]-point_b[0:2])
+
     def reset_model(self, 
                     agent_randomize: bool = False, 
                     goal_randomize: bool = False, 
@@ -261,9 +289,8 @@ class Nav2D(MujocoEnv):
             # randomize the X,Y position of the agent by randomly sampling in a box around the center of the worldbody:
             qpos[0:2] = self.np_random.uniform(size=2, low=-self.agent_bound, high=self.agent_bound)
 
-            # randomize the pose of the agent by randomly sampling between 0 and 2*pi:
-            heading = self.get_heading(agent_pos=qpos[0:2], goal_pos=qpos[3:5])
-            
+            # randomize the pose of the agent by randomly sampling within self.angle_bound/2 away from the required heading
+            heading = self._get_heading(agent_pos=qpos[0:2], goal_pos=qpos[3:5])
             qpos[2] = self.np_random.uniform(size = 1, low = heading - self.angle_bound / 2, high = heading + self.angle_bound / 2)
 
             # randomize the velocity of the agent:
@@ -292,17 +319,6 @@ class Nav2D(MujocoEnv):
         self.dist_progress_count = 0
         self.head_progress_count = 0
         return ob
-    
-    def get_heading(self, 
-                    agent_pos: list, 
-                    goal_pos: list):
-        # this function gets the heading based on an agent_pos and a goal_pos
-        diff = goal_pos - agent_pos
-
-        # heading:
-        heading = np.arctan2(diff[1], diff[0], dtype = np.float32) % (2*np.pi)
-
-        return heading
 
     def reset(self,
               seed: int | None = None,
@@ -341,7 +357,7 @@ class Nav2D(MujocoEnv):
         
         else: # if an evaluation env, always reset and with the largest bound possible
             self.agent_bound = self.agent_bound_final
-            self.goal_bound = self.goal_bound_final
+            self.goal_bound = 0.3 * self.goal_bound_final
             ob = self.reset_model(agent_randomize=True,
                                   goal_randomize=True,
                                   obstacle_randomize=True)
@@ -355,17 +371,6 @@ class Nav2D(MujocoEnv):
         if self.render_mode == "human":
             self.render()
         return ob, info
-
-    def _get_l2_distance(self, point_a: Sequence, point_b: Sequence):
-        ''' internal method to obtain the Cartesian (l_2) distance between two points in 2D space
-        
-        Arguments:
-            point_a:    a list or sequence containing at least the x-y coordinates of the first point
-            point_b:    a list or sequence containing at least the x-y coordinates of the second point
-        Returns:
-            the 2-D Cartesian distance between the two points
-        '''
-        return np.linalg.norm(point_a[0:2]-point_b[0:2])
 
     def step(self, action):
         ''' method to execute one simulation step given the velocity command to the agent
@@ -444,6 +449,13 @@ class Nav2D(MujocoEnv):
         term = distance_cond or obstacle_cond or (self.dist_progress_count >= self.progress_threshold) or (self.head_progress_count >= self.progress_threshold)
         
         info = {}
+
+        if term:
+            info["is_success"]          = bool(distance_cond)
+            info["obstacle_cond"]       = bool(obstacle_cond)
+            info["dist_progress_cond"]  = (self.dist_progress_count >= self.progress_threshold)
+            info["head_progress_cond"]  = (self.head_progress_count >= self.progress_threshold)
+            
         # 4. reward:
         if distance_cond:
             rew = self.rew_goal_scale
@@ -507,8 +519,6 @@ class Nav2D(MujocoEnv):
         # 5. info (optional):
         # info = {"reward": rew, "dist_cond": distance_cond, "obst_cond": obstacle_cond}
         # info = {}
-        if term:
-            info["is_success"] = bool(distance_cond)
         
         # 6. render if render_mode human:
         if self.render_mode == "human":
