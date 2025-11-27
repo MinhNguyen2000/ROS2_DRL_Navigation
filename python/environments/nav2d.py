@@ -149,7 +149,7 @@ class Nav2D(MujocoEnv):
         # goal randomization bounds
         self.goal_bound_init = 0
         self.goal_bound_final = self.size - 2*self.agent_radius
-        self.goal_bound = self.goal_bound_init
+        self.goal_bound = self.goal_bound_final
 
         # --- TERMINATION CONDITION INITILIZATION
         self.distance_threshold = self.agent_radius
@@ -256,13 +256,13 @@ class Nav2D(MujocoEnv):
         noise_high = 0.1
 
         # get a copy of the initial_qpos
-        qpos = np.copy(self.init_qpos)      # initially agent is at [0.0, 0.0], goal is at [0.0, 0.0]
+        qpos = np.copy(self.init_qpos)
         qvel = np.copy(self.init_qvel)
 
         # if it is time to randomize the goal:
         if goal_randomize:
             # randomize the X,Y position of the goal by randomly sampling in a box around the center of the worldbody:
-            qpos[3:5] = self.np_random.uniform(size = 2, low = -self.goal_bound, high = self.goal_bound)
+            qpos[3:5] = self.np_random.uniform(size = 2, low = -self.goal_bound, high = self.goal_bound) - self._task_loc
             self.init_qpos[3:5] = qpos[3:5]
 
         # if it is time to randomize the agent:
@@ -285,19 +285,13 @@ class Nav2D(MujocoEnv):
             pass
 
         self.set_state(qpos, qvel)
-        ob = self._get_obs() 
-
-        # get initial agent-goal distance
-        # agent_pos = ob[0:2]
-        # goal_pos = ob[6:8]
-        # self.d_goal_last = self._get_l2_distance(agent_pos, goal_pos)
+        ob = self._get_obs()
 
         delta_x, delta_y = ob[:2]
         self.d_goal_last = np.sqrt(delta_x ** 2 + delta_y ** 2)     # to track distance approach progress
-        self.d_init = self.d_goal_last                          # to track overall distance progress
+        self.d_init = self.d_goal_last                              # to track overall distance progress
 
         # get the last angular difference:
-        # required_heading = self._get_heading(agent_pos=agent_pos, goal_pos=goal_pos)
         required_heading = np.arctan2(delta_y, delta_x, dtype = np.float32) % (2 * np.pi)
         self.prev_abs_diff = abs((required_heading - qpos[2] % (2 * np.pi) + np.pi) % (2 * np.pi) - np.pi)
 
@@ -310,7 +304,7 @@ class Nav2D(MujocoEnv):
               seed: int | None = None,
               options: dict | None = None):
         
-        # increment a counter:
+        # increment episode counter:
         self.episode_counter += 1
         
         # call the reset method of the parent class:
@@ -332,8 +326,8 @@ class Nav2D(MujocoEnv):
             #     self.agent_randomize = True
 
             # goal randomization, with goal bound increase handled externally
-            # if self.episode_counter % self.goal_frequency == 0:
-            #     self.goal_randomize = True
+            if self.episode_counter % self.goal_frequency == 0:
+                self.goal_randomize = True
 
             # if self.episode_counter % self.obstacle_frequency == 0:
             #     self.obstacle_randomize = True
@@ -482,25 +476,3 @@ if ENV_ID not in gym.envs.registry:
         entry_point="nav2d:Nav2D",
         max_episode_steps=1_000,
     )
-
-# def _get_heading(self, 
-#             agent_pos: list, 
-#             goal_pos: list):
-#     # this internal method gets the heading based on an agent_pos and a goal_pos
-#     diff = goal_pos - agent_pos
-
-#     # heading:
-#     heading = np.arctan2(diff[1], diff[0], dtype = np.float32) % (2*np.pi)
-
-#     return heading
-
-# def _get_l2_distance(self, point_a: Sequence, point_b: Sequence):
-#     ''' internal method to obtain the Cartesian (l_2) distance between two points in 2D space
-    
-#     Arguments:
-#         point_a:    a list or sequence containing at least the x-y coordinates of the first point
-#         point_b:    a list or sequence containing at least the x-y coordinates of the second point
-#     Returns:
-#         the 2-D Cartesian distance between the two points
-#     '''
-#     return np.linalg.norm(point_a[0:2]-point_b[0:2])
