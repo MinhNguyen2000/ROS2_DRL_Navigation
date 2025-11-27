@@ -46,7 +46,7 @@ def init_model(hyperparameters : dict,
     
     # wrap environments in a normalization wrapper:
     if normalize:
-        env = VecNormalize(env, norm_obs = True, norm_reward = True, clip_obs = 10.0)
+        env = VecNormalize(env, norm_obs = True, norm_reward = True, clip_obs = 5.0)
 
     # make the model:
     model = SAC(policy = hyperparameters["policy"],
@@ -110,6 +110,7 @@ def eval_policy(env: gym.Env,
 
 # function for training a given model:
 def train_model(model,
+                env,
                 dir_path,
                 reward_scale : dict,
                 randomization_options : dict,
@@ -158,7 +159,8 @@ def train_model(model,
 
     hyperparam_codified = f"{hyperparameters["actor_lr"]}_{hyperparameters["critic_lr"]}_{hyperparameters["buffer_size"]}_{hyperparameters["batch_size"]}_{hyperparameters["tau"]}_{hyperparameters["gamma"]}_"
     hyperparam_codified += f"{hyperparameters["train_freq"]}_{hyperparameters["gradient_steps"]}_{hyperparameters["ent_coef"]}_{hyperparameters["target_update_interval"]}_{hyperparameters["target_entropy"]}_"
-    hyperparam_codified += f"{reward_scale['rew_head_scale']}_{reward_scale["rew_head_approach_scale"]}_{reward_scale['rew_dist_scale']}_{reward_scale['rew_goal_scale']}_{reward_scale['rew_obst_scale']}"
+    # hyperparam_codified += f"{reward_scale['rew_head_scale']}_{reward_scale["rew_head_approach_scale"]}_{reward_scale['rew_dist_scale']}_{reward_scale['rew_dist_approach_scale']}_{reward_scale['rew_goal_scale']}_{reward_scale['rew_obst_scale']}_"
+    hyperparam_codified += f"{reward_scale['rew_head_scale']}_{reward_scale['rew_dist_scale']}_{reward_scale['rew_goal_scale']}_{reward_scale['rew_obst_scale']}_"
     hyperparam_codified += f"{randomization_options['agent_freq']}_{randomization_options["goal_freq"]}_{randomization_options["obstacle_freq"]}"
 
     timestamp = datetime.now().strftime("%y%m%d_%H%M")
@@ -169,6 +171,9 @@ def train_model(model,
     with open(trial_to_param_path, "w") as f:
         json.dump(data, f, indent=2)
 
+    # close the environment:
+    env.close()
+    
 # objective function for optuna:
 def objective_model_params(trial):
     # set the tensorboard logging directory:
@@ -253,51 +258,52 @@ def main(do_studies : bool = False,
     tensorboard_log_dir = os.path.join(dir_path, "results", "Nav2D_SAC_SB3_tensorboard")
 
     # set the training parameters:
-    number_of_runs = 500
-    steps_per_run = 50000
+    number_of_runs = 50
+    steps_per_run = 50_000
 
     # if not using optuna:
     if not do_studies:
         # reward_scale:
-        reward_scale = {"rew_head_scale" : 10.0,
-                        "rew_head_approach_scale" : 220.0,
-                        "rew_dist_scale" : 3.5,
-                        "rew_dist_approach_scale" : 200.0,
-                        "rew_goal_scale" : 5000.0,
+        reward_scale = {"rew_dist_scale" : 1.0,
+                        "rew_dist_approach_scale" : 250.0,
+                        "rew_head_scale" : 1.0,
+                        "rew_head_approach_scale" : 250.0,
+                        "rew_goal_scale" : 10_000.0,
                         "rew_obst_scale" : -1000.0, 
                         "rew_time" : -0.25}
         
         randomization_options = {"agent_freq" : 1,
-                         "goal_freq" : 25,
-                         "obstacle_freq" : 1}
+                        "goal_freq" : 1,
+                        "obstacle_freq" : 1}
         
         # model hyperparameters:
         hyperparameters = {"policy" : "MlpPolicy",
-                           "gamma" : 0.99,
-                           "actor_lr" : 3e-4,
-                           "critic_lr" : 3e-4,
-                           "buffer_size" : int(1e6),
-                           "batch_size" : 512,
-                           "tau" : 5e-3,
-                           "ent_coef" : "auto",
-                           "train_freq" : 2,
-                           "learning_starts" : 0,
-                           "target_update_interval" : 1,
-                           "gradient_steps" : 2,
-                           "target_entropy" : "-2",
-                           "action_noise" : None,
-                           "verbose" : 0, 
-                           "gpu" : True,
-                           "tensorboard_log" : tensorboard_log_dir}
+                        "gamma" : 0.99,
+                        "actor_lr" : 3e-4,
+                        "critic_lr" : 3e-4,
+                        "buffer_size" : int(1e6),
+                        "batch_size" : 512,
+                        "tau" : 5e-3,
+                        "ent_coef" : "auto_0.1",
+                        "train_freq" : 1,
+                        "learning_starts" : 0,
+                        "target_update_interval" : 1,
+                        "gradient_steps" : 4,
+                        "target_entropy" : "-2",
+                        "action_noise" : None,
+                        "verbose" : 0, 
+                        "gpu" : True,
+                        "tensorboard_log" : tensorboard_log_dir}
         
         # get the model and the environment:
-        _, model = init_model(hyperparameters = hyperparameters, 
+        env, model = init_model(hyperparameters = hyperparameters, 
                                 reward_scale = reward_scale,
                                 randomization_options = randomization_options,
                                 normalize = normalize)
         
         # train the model:
         train_model(model = model, 
+                    env = env,
                     dir_path = dir_path,
                     reward_scale = reward_scale,
                     randomization_options = randomization_options,
@@ -308,7 +314,7 @@ def main(do_studies : bool = False,
             
     # if using optuna:
     else:
-        # # set the study parameters:
+        # set the study parameters:
         study_name = "model_params_nov13"
         direction = "maximize"
         storage = "sqlite:///python/environments/results/optuna_results.db"
