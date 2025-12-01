@@ -264,13 +264,12 @@ class Nav2D(MujocoEnv):
         # if it is time to randomize the agent:
         if agent_randomize:
             # randomize the X,Y position of the agent by randomly sampling in a box around the center of the worldbody:
-            # qpos[0:2] = self.np_random.uniform(size = 2, low = -self.agent_bound, high = self.agent_bound) - self._agent_loc
+            qpos[0:2] = self.np_random.uniform(size = 2, low = -self.agent_bound, high = self.agent_bound) - self._agent_loc
 
             # randomize the pose of the agent by randomly sampling within self.angle_bound/2 away from the required heading
-            dx, dy = qpos[3:5] - qpos[0:2]
-            heading = np.arctan2(dy, dx, dtype=np.float32) % (2*np.pi)
-            # qpos[2] = self.np_random.uniform(size = 1, low = heading - self.angle_bound / 2, high = heading + self.angle_bound / 2)
-            qpos[2] = self.np_random.uniform(size = 1, low = 0.0, high = np.pi / 2)
+            dx, dy = (qpos[3:5] + self ._task_loc) - (qpos[0:2] + self._agent_loc)
+            bearing = np.arctan2(dy, dx, dtype=np.float32) % (2*np.pi)
+            qpos[2] = self.np_random.uniform(size = 1, low = bearing - self.angle_bound / 2, high = bearing + self.angle_bound / 2) % (2 * np.pi)
 
             # randomize the velocity of the agent:
             qvel[0:2] = self.np_random.uniform(size = 2, low = noise_low, high = noise_high)
