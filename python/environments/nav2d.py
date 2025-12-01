@@ -266,12 +266,13 @@ class Nav2D(MujocoEnv):
         # if it is time to randomize the agent:
         if agent_randomize:
             # randomize the X,Y position of the agent by randomly sampling in a box around the center of the worldbody:
-            qpos[0:2] = self.np_random.uniform(size = 2, low = -self.agent_bound, high = self.agent_bound) - self._agent_loc
+            # qpos[0:2] = self.np_random.uniform(size = 2, low = -self.agent_bound, high = self.agent_bound) - self._agent_loc
 
             # randomize the pose of the agent by randomly sampling within self.angle_bound/2 away from the required heading
             dx, dy = qpos[3:5] - qpos[0:2]
             heading = np.arctan2(dy, dx, dtype=np.float32) % (2*np.pi)
-            qpos[2] = self.np_random.uniform(size = 1, low = heading - self.angle_bound / 2, high = heading + self.angle_bound / 2)
+            # qpos[2] = self.np_random.uniform(size = 1, low = heading - self.angle_bound / 2, high = heading + self.angle_bound / 2)
+            qpos[2] = self.np_random.uniform(size = 1, low = 0.0, high = np.pi / 2)
 
             # randomize the velocity of the agent:
             qvel[0:2] = self.np_random.uniform(size = 2, low = noise_low, high = noise_high)
@@ -322,8 +323,8 @@ class Nav2D(MujocoEnv):
         
         if not self.is_eval:
             # agent randomization
-            # if self.episode_counter == 1 or self.episode_counter % self.agent_frequency == 0:
-            #     self.agent_randomize = True
+            if self.episode_counter == 1 or self.episode_counter % self.agent_frequency == 0:
+                self.agent_randomize = True
 
             # goal randomization, with goal bound increase handled externally
             if self.episode_counter % self.goal_frequency == 0:
@@ -437,31 +438,20 @@ class Nav2D(MujocoEnv):
         elif obstacle_cond:
             rew = self.rew_obst_scale
         else:
-            # --- BASE DISTANCE REWARD:
-            rew_dist = 1 - d_goal / self.dmax
-            self.rew_dist_scaled = self.rew_dist_scale * rew_dist
+            # --- APPROACH REWARD:
+            rew_dist_approach = self.d_goal_last - d_goal
+            self.rew_dist_approach_scaled = self.rew_dist_approach_scale * rew_dist_approach
 
-            # --- BASE HEADING REWARD:
-            rew_head = 1 - abs_diff / np.pi
+            # --- ALIGNMENT REWARD:
+            rew_head = 1 + np.cos(abs_diff)
             self.rew_head_scaled = self.rew_head_scale * rew_head
 
-            #--- DISTANCE APPROACH REWARD:
-            rew_dist_approach = max((self.d_goal_last - d_goal), 0)
-            self.rew_dist_approach_scaled = rew_dist_approach * self.rew_dist_approach_scale
+            # --- TOTAL REWARD:
+            rew = self.rew_dist_approach_scaled + self.rew_head_scaled + self.rew_time
 
-            #--- HEADING APPROACH REWARD:
-            rew_head_approach = max((self.prev_abs_diff - abs_diff), 0)
-            self.rew_head_approach_scaled = self.rew_head_approach_scale * rew_head_approach
-
-            #--- TIME REWARD:
-            rew_time = self.rew_time    # going to keep this very small relative to the reward scale
-
-            #--- TOTAL REWARD TERM:
-            rew = self.rew_dist_scaled +  self.rew_head_scaled + self.rew_dist_approach_scaled + self.rew_head_approach_scaled + rew_time 
-
-            # print to user:
+            # --- PRINT TO USER:
             if self.render_mode == "human":
-                print(f" @ episode {self.episode_counter} | rew_dist: {self.rew_dist_scaled:.4f} | rew_head: {self.rew_head_scaled:.4f} | rew_dist_approach: {self.rew_dist_approach_scaled:.4f} | rew_head_approach: {self.rew_head_approach_scaled:.4f} |  total: {rew:.5f}                                                                              ", end="\r")
+                print(f" @ episode {self.episode_counter} | rew_dist_approach: {self.rew_dist_approach_scaled:.4f} | rew_head: {self.rew_head_scaled:.4f} | total: {rew:.5f}                              ", end = "\r")
 
         # advance histories:
         self.d_goal_last = d_goal
