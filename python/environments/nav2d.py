@@ -268,10 +268,11 @@ class Nav2D(MujocoEnv):
         # if it is time to randomize the agent:
         if agent_randomize:
             # randomize the X,Y position of the agent by randomly sampling in a box around the center of the worldbody:
-            qpos[0:2] = self.np_random.uniform(size = 2, low = -self.agent_bound, high = self.agent_bound)
+            qpos[0:2] = self.np_random.uniform(size = 2, low = -self.agent_bound, high = self.agent_bound) - self._agent_loc
 
             # randomize the pose of the agent by randomly sampling within self.angle_bound/2 away from the required heading
-            heading = self._get_heading(agent_pos = qpos[0:2], goal_pos = qpos[3:5])
+            dx, dy = qpos[3:5] - qpos[0:2]
+            heading = np.arctan2(dy, dx, dtype=np.float32) % (2*np.pi)
             qpos[2] = self.np_random.uniform(size = 1, low = heading - self.angle_bound / 2, high = heading + self.angle_bound / 2)
 
             # randomize the velocity of the agent:
@@ -287,13 +288,11 @@ class Nav2D(MujocoEnv):
         self.set_state(qpos, qvel)
         ob = self._get_obs()
 
-        delta_x, delta_y = ob[:2]
-        self.d_goal_last = np.sqrt(delta_x ** 2 + delta_y ** 2)     # to track distance approach progress
+        self.d_goal_last = ob[0]     # to track distance approach progress
         self.d_init = self.d_goal_last                              # to track overall distance progress
 
         # get the last angular difference:
-        required_heading = np.arctan2(delta_y, delta_x, dtype = np.float32) % (2 * np.pi)
-        self.prev_abs_diff = abs((required_heading - qpos[2] % (2 * np.pi) + np.pi) % (2 * np.pi) - np.pi)
+        self.prev_abs_diff = ob[1]
 
         # reset the distance progress count
         self.dist_progress_count = 0
