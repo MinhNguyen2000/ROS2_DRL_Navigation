@@ -160,9 +160,9 @@ class Nav2D(MujocoEnv):
 
         # --- REWARD SCALE INITIALIZATION
         self.rew_dist_scale             = reward_scale_options.get("rew_dist_scale", 1)             if reward_scale_options else 1
-        self.rew_dist_approach_scale    = reward_scale_options.get("rew_dist_approach_scale", 100)  if reward_scale_options else 100
+        self.rew_dist_approach_scale    = reward_scale_options.get("rew_dist_approach_scale", 250)  if reward_scale_options else 100
         self.rew_head_scale             = reward_scale_options.get("rew_head_scale", 1)             if reward_scale_options else 1
-        self.rew_head_approach_scale    = reward_scale_options.get("rew_head_approach_scale", 100)  if reward_scale_options else 100
+        self.rew_head_approach_scale    = reward_scale_options.get("rew_head_approach_scale", 250)  if reward_scale_options else 100
         self.rew_goal_scale             = reward_scale_options.get("rew_goal_scale", 5000)          if reward_scale_options else 5000
         self.rew_obst_scale             = reward_scale_options.get("rew_obst_scale", -1000)         if reward_scale_options else -1000
         self.rew_time                   = reward_scale_options.get("rew_time", -0.25)               if reward_scale_options else -0.25
@@ -181,13 +181,13 @@ class Nav2D(MujocoEnv):
         internal method to set the bounds on the observation space
 
         order of the bounds:
-            (1, ): the relative cartesian distance between the agent and the goal
-            (1, ): the absolute difference between the agents heading and the required heading
+            (2, ): the dx and dy components of how far the agent is from the goal
+            (2, ): the cos(theta) and sin(theta) components of the agent's heading
             (n_rays, ): LiDAR scans
 
         '''
         # define the obs_space_size:
-        self._obs_space_size = 1 + 1 + self.n_rays
+        self._obs_space_size = 2 + 2 + self.n_rays
 
         # set the scale on the observation space as being between [-1, 1]:
         low  = -np.ones((self._obs_space_size, ), dtype = np.float32) 
@@ -197,8 +197,8 @@ class Nav2D(MujocoEnv):
         low[0]  = -self.dmax    # lower distance bound
         high[0] = self.dmax     # upper distance bound
         
-        low[1]  = -np.pi        # lower angular bound
-        high[1] = np.pi         # upper angular bound
+        low[1]  = 0.0         # lower angular bound
+        high[1] = 1.0         # upper angular bound
 
         low[2:]  = 0.0          # lower LiDAR bound
         high[2:] = self.dmax + np.sqrt(2 * self.agent_radius**2)    # upper LiDAR bound
@@ -211,7 +211,7 @@ class Nav2D(MujocoEnv):
         return self.observation_space
     
     def _set_action_space(self):
-        ''' internal method to set the bounds on the agent's local x_linear, y_linear and z_angular velocities'''
+        ''' internal method to set the bounds on the agent's local x_linear and z_angular velocities'''
         # set the low and high of the action space:
         self.action_low = np.array([0, -1.0], dtype = np.float32)
         self.action_high = np.array([1.0, 1.0], dtype = np.float32)
@@ -227,24 +227,22 @@ class Nav2D(MujocoEnv):
         ''' internal method to obtain the location of agent/goal and the simulated LiDAR scan at any instance 
         
         Returns: obs_buffer containing
-            (1, ): the relative cartesian distance between the agent and the goal
-            (1, ): the absolute difference between the agents heading and the required heading
+            (2, ): the dx and dy components of how far the agent is from the goal
+            (2, ): the cos(theta) and sin(theta) components of the agent's heading
             (n_rays, ): normalized LiDAR scans
         '''
-        # need to compute the distance between the agent and the goal:
+        # need to compute the dx and dy between the agent and the goal:
         dx, dy = self.data.xpos[self.goal_id][:2] - self.data.xpos[self.agent_id][:2]
 
-        cartesian_distance = np.sqrt(dx ** 2 + dy ** 2)
+        # grab the heading of the agent:
+        theta = self.data.qpos[2]
+        c_theta = np.cos(theta)
+        s_theta = np.sin(theta)
 
-        # need to compute the difference in heading:
-        wrapped_theta       = self.data.qpos[2] % (2 * np.pi)
-        required_heading    = np.arctan2(dy, dx, dtype = np.float32) % (2 * np.pi)
-        heading_diff = np.abs((required_heading - wrapped_theta + np.pi) % (2 * np.pi) - np.pi)
-
-        #--- modify obs buffer inplace instead of concatenation overhead (time + memory)
-        self._obs_buffer[0]  = cartesian_distance
-        self._obs_buffer[1]  = heading_diff
-        self._obs_buffer[2:] = self.data.sensordata[:-1]
+        #--- modify obs buffer inplace instead of concatenation overhead (time + memory):
+        self._obs_buffer[0:2]  = dx, dy
+        self._obs_buffer[2:4]  = c_theta, s_theta
+        self._obs_buffer[4:] = self.data.sensordata[:-1]
 
         return self._obs_buffer
 
@@ -288,11 +286,14 @@ class Nav2D(MujocoEnv):
         self.set_state(qpos, qvel)
         ob = self._get_obs()
 
-        self.d_goal_last = ob[0]     # to track distance approach progress
-        self.d_init = self.d_goal_last                              # to track overall distance progress
+        # get the previous d_goal:
+        dx, dy = ob[0:2]
+        self.d_goal_last = np.sqrt(dx**2  + dy**2)      # to track distance approach progress
+        self.d_init = self.d_goal_last                  # to track overall distance progress
 
-        # get the last angular difference:
-        self.prev_abs_diff = ob[1]
+        # get the previous abs_diff:
+        required_heading = np.arctan2(dy, dx, dtype = np.float32) % (2 * np.pi)
+        self.prev_abs_diff = abs((required_heading - qpos[2] % (2 * np.pi) + np.pi) % (2 * np.pi) - np.pi)
 
         # reset the distance progress count
         self.dist_progress_count = 0
@@ -389,10 +390,18 @@ class Nav2D(MujocoEnv):
 
         # 2. collect the new observation (LiDAR simulation, location of agent/goal using the custom _get_obs())\
         nobs = self._get_obs()      # this is [d_goal, abs_diff, LiDAR]
-        d_goal      = nobs[0]
-        abs_diff    = nobs[1]
-        lidar_obs   = nobs[2:]
-        
+        dx, dy = nobs[0:2]
+        c_theta, s_theta = nobs[2:4]
+        lidar_obs = nobs[4:]
+
+        # get the cartesian distance between the agent and the goal:
+        d_goal = np.sqrt(dx**2  + dy**2)
+
+        # get the difference between the agents current heading, and the required heading:
+        wrapped_theta       = theta % (2 * np.pi)
+        required_heading    = np.arctan2(dy, dx, dtype = np.float32) % (2 * np.pi)
+        abs_diff = np.abs((required_heading - wrapped_theta + np.pi) % (2 * np.pi) - np.pi)
+
         # 3. termination conditions: 
         # when the agent is close to the goal:
         distance_cond = d_goal < self.distance_threshold
@@ -406,7 +415,7 @@ class Nav2D(MujocoEnv):
         else:
             self.dist_progress_count = 0
 
-        # when the abs_diff is more than 15 degress and still growing
+        # when the abs_diff is more than 15 degress and still growing:
         if abs_diff >= self.prev_abs_diff and (abs_diff > (15 / 180 * np.pi)):
             self.head_progress_count += 1
         else:
