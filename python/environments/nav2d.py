@@ -189,16 +189,13 @@ class Nav2D(MujocoEnv):
         # define the obs_space_size:
         self._obs_space_size = 2 + 2 + self.n_rays
 
-        # set the scale on the observation space as being between [-1, 1]:
+        # initialize the scale on the observation space as being between [-1, 1]:
         low  = -np.ones((self._obs_space_size, ), dtype = np.float32) 
-        high = np.ones((self._obs_space_size, ), dtype = np.float32)
+        high =  np.ones((self._obs_space_size, ), dtype = np.float32)
 
         # scale these bounds accordingly:
-        low[0:2]  = -self.dmax    # lower distance bound
-        high[0:2] = self.dmax     # upper distance bound
-        
-        low[2:4]  = 0.0         # lower angular bound
-        high[2:4] = 1.0         # upper angular bound
+        low[0:2]  = -2 * (self.size - self.agent_radius)    # lower distance bound
+        high[0:2] =  2 * (self.size - self.agent_radius)    # upper distance bound
 
         low[4:]  = 0.0          # lower LiDAR bound
         high[4:] = self.dmax + np.sqrt(2 * self.agent_radius**2)    # upper LiDAR bound
@@ -208,6 +205,7 @@ class Nav2D(MujocoEnv):
             low = low,            
             high = high,         
             dtype = np.float32)
+        
         return self.observation_space
     
     def _set_action_space(self):
@@ -291,10 +289,13 @@ class Nav2D(MujocoEnv):
         dx, dy = ob[0:2]
         self.d_goal_last = np.sqrt(dx**2  + dy**2)      # to track distance approach progress
         self.d_init = self.d_goal_last                  # to track overall distance progress
-
-        # get the previous abs_diff:
-        required_heading = np.arctan2(dy, dx, dtype = np.float32) % (2 * np.pi)
-        self.prev_abs_diff = abs((required_heading - qpos[2] % (2 * np.pi) + np.pi) % (2 * np.pi) - np.pi)
+   
+        # get the initial abs_diff
+        c_theta, s_theta = ob[2:4]
+        bearing = np.arctan2(dy,        dx,         dtype = np.float32) % (2 * np.pi)            # angle between the agent-target line and the x_axis
+        heading = np.arctan2(s_theta,   c_theta,    dtype = np.float32) % (2 * np.pi)        # the agent's heading
+        rel_bearing = bearing - heading
+        self.prev_abs_diff = abs((rel_bearing + np.pi) % (2*np.pi) - np.pi)
 
         # reset the distance progress count
         self.dist_progress_count = 0
@@ -372,11 +373,11 @@ class Nav2D(MujocoEnv):
         action_rot = np.copy(action_pre)
 
         # get angle:
-        theta = self.data.qpos[2]   # theoretically faster than a function call
+        theta = self.data.qpos[2]
 
         # action transformed into global frame:
-        cos_theta = np.cos(theta)
-        sin_theta = np.sin(theta)
+        cos_theta = np.cos(theta, dtype = np.float32)
+        sin_theta = np.sin(theta, dtype = np.float32)
         action_rot[0] = cos_theta * action_pre[0] - sin_theta * action_pre[1]
         action_rot[1] = sin_theta * action_pre[0] + cos_theta * action_pre[1]
 
@@ -389,7 +390,7 @@ class Nav2D(MujocoEnv):
         # step the mujoco model:
         mj.mj_step(self.model, self.data, nstep = self.frame_skip)
 
-        # 2. collect the new observation (LiDAR simulation, location of agent/goal using the custom _get_obs())\
+        # 2. collect the new observation (LiDAR simulation, location of agent/goal using the custom _get_obs())
         nobs = self._get_obs()      # this is [d_goal, abs_diff, LiDAR]
         dx, dy = nobs[0:2]
         c_theta, s_theta = nobs[2:4]
@@ -399,9 +400,10 @@ class Nav2D(MujocoEnv):
         d_goal = np.sqrt(dx**2  + dy**2)
 
         # get the difference between the agents current heading, and the required heading:
-        wrapped_theta       = theta % (2 * np.pi)
-        required_heading    = np.arctan2(dy, dx, dtype = np.float32) % (2 * np.pi)
-        abs_diff = np.abs((required_heading - wrapped_theta + np.pi) % (2 * np.pi) - np.pi)
+        bearing = np.arctan2(dy,        dx,         dtype = np.float32) % (2 * np.pi)
+        heading = np.arctan2(s_theta,   c_theta,    dtype = np.float32) % (2 * np.pi)
+        rel_bearing = bearing - heading
+        abs_diff    = abs((rel_bearing + np.pi) % (2*np.pi) - np.pi)
 
         # 3. termination conditions: 
         # when the agent is close to the goal:
