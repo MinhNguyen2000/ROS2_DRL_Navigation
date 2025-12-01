@@ -194,14 +194,14 @@ class Nav2D(MujocoEnv):
         high = np.ones((self._obs_space_size, ), dtype = np.float32)
 
         # scale these bounds accordingly:
-        low[0]  = -self.dmax    # lower distance bound
-        high[0] = self.dmax     # upper distance bound
+        low[0:2]  = -self.dmax    # lower distance bound
+        high[0:2] = self.dmax     # upper distance bound
         
-        low[1]  = 0.0         # lower angular bound
-        high[1] = 1.0         # upper angular bound
+        low[2:4]  = 0.0         # lower angular bound
+        high[2:4] = 1.0         # upper angular bound
 
-        low[2:]  = 0.0          # lower LiDAR bound
-        high[2:] = self.dmax + np.sqrt(2 * self.agent_radius**2)    # upper LiDAR bound
+        low[4:]  = 0.0          # lower LiDAR bound
+        high[4:] = self.dmax + np.sqrt(2 * self.agent_radius**2)    # upper LiDAR bound
 
         # set the observation space:
         self.observation_space = gym.spaces.Box(
