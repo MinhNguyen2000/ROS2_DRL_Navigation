@@ -218,9 +218,15 @@ class Nav2D(MujocoEnv):
         return self.action_space
     
     def _set_goal_bound(self, ratio: float):
-        """ internal method to control the active goal randomization boundary """
-        self.goal_bound = ratio * self.goal_bound_final
+        ''' internal method to control the active goal randomization boundary
+        * this method is used for curriculum learnnng in the training script'''
+        self.goal_bound = ratio * (self.goal_bound_final - self.goal_bound_init) + self.goal_bound_init
     
+    def _set_agent_bound(self, ratio: float):
+        ''' internal method to control the active goal randomization boundary
+        * this method is used for curriculum learnnng in the training script'''
+        self.agent_bound = ratio * (self.agent_bound_final - self.agent_bound_init) + self.agent_bound_init
+
     def _get_obs(self):
         ''' internal method to obtain the location of agent/goal and the simulated LiDAR scan at any instance 
         
@@ -234,13 +240,13 @@ class Nav2D(MujocoEnv):
 
         # grab the heading of the agent:
         theta = self.data.qpos[2]
-        c_theta = np.cos(theta)
-        s_theta = np.sin(theta)
+        c_theta = np.cos(theta, dtype=np.float32)
+        s_theta = np.sin(theta, dtype=np.float32)
 
         #--- modify obs buffer inplace instead of concatenation overhead (time + memory):
-        self._obs_buffer[0:2]  = dx, dy
-        self._obs_buffer[2:4]  = c_theta, s_theta
-        self._obs_buffer[4:] = self.data.sensordata[:-1]
+        self._obs_buffer[0:2] = dx, dy
+        self._obs_buffer[2:4] = c_theta, s_theta
+        self._obs_buffer[4:]  = self.data.sensordata[:-1]
 
         return self._obs_buffer
 
