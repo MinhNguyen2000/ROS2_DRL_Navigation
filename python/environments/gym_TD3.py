@@ -725,7 +725,7 @@ def main():
         use_custom_policy = False
         cuda_enabled = True
         
-        env = VecNormalize(env, training=True, norm_obs=False, norm_reward=True, gamma=gamma)
+        env = VecNormalize(env, training=True, norm_obs=True, norm_reward=True, gamma=gamma)
         env.reset()
         
         # Create the model
