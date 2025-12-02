@@ -92,17 +92,21 @@ def main():
         return mean_success, mean_ep_len, mean_final_dist
 
     class CurriculumCallback(BaseCallback):
-        def __init__(self, success_window = 100, threshold = 0.9):
+        def __init__(self, success_window = 100, threshold = 0.9, cooldown_eps = 200):
             super().__init__()
             self.success_threshold = threshold
             self.success_window = success_window
             self.buffer = deque(maxlen=success_window)
-            self.goal_bound_levels = np.linspace(0,1,9)
+            self.goal_bound_levels = np.linspace(0,1,11)
             self.goal_level_idx = 0
             self.agent_bound_levels = np.linspace(0,1,5)
             self.agent_level_idx = 0
 
-            self.explore_boost_steps = 0            # keep count of 
+            self.explore_boost_steps = 0            # keep count of the number of steps with increased exploration (higher action noise)
+
+            self.cooldown_eps = cooldown_eps
+            self.cooldown_active = False
+            self.cooldown_remaining = 0
 
         def _on_step(self) -> bool:
             # grab info dict from each parallel env
@@ -111,26 +115,38 @@ def main():
             for info in infos:
                 if "is_success" in info:        # check terminal state in each env
                     self.buffer.append(info["is_success"])
-                elif info["TimeLimit.truncated"] == True:                           # in case of truncation, there is no "is_success" in info => unsuccessful
+                    if self.cooldown_active: self.cooldown_remaining -= 1
+                elif info.get("TimeLimit.truncated", False):                           # in case of truncation, there is no "is_success" in info => unsuccessful
                     self.buffer.append(False)
+                    if self.cooldown_active: self.cooldown_remaining -= 1
 
-            if len(self.buffer) >= self.success_window:
+            # cooldown episode countdown after curriculum advancement
+            if self.cooldown_active and (self.cooldown_remaining <= 0): 
+                self.cooldown_active = False
+                self.cooldown_remaining = 0
+
+            # curriculum advancement logic
+            if (not self.cooldown_active 
+                and len(self.buffer) >= self.success_window):
+
                 success_rate = sum(self.buffer)/len(self.buffer)
                 print(f"Current training success {success_rate:3.2f}", end="\r")
 
                 # if the success rate of the past N episodes exceed success threshold:
                 # 1. advance the agent curriculum
                 # 2. if the agent is randomized at maximum bound, start advancing the goal curriculum 
-                if success_rate > self.success_threshold:
+                if (success_rate > self.success_threshold) :
                     if self.agent_level_idx < len(self.agent_bound_levels) - 1:
                         self._advance_agent_curriculum()
                         self.buffer.clear()
+                        self._start_cooldown()
                     else:
-                        # self._advance_goal_curriculum()
-                        # self.buffer.clear()
+                        self._advance_goal_curriculum()
+                        self.buffer.clear()
+                        self._start_cooldown()
                         pass
-                    
-            # handle episodes with increased action noise
+
+            # countdown of episodes with boosted exploration
             if self.explore_boost_steps > 0:
                 self.explore_boost_steps -= 1
                 if self.explore_boost_steps == 0:
@@ -142,6 +158,12 @@ def main():
                     print(f"\nFinished with steps of increased exploration, noise reset to {i._sigma} \n")
             return True     # to continue training, return True, else return False
         
+        def _start_cooldown(self):
+            '''Function to countd down the episodes of no curriculum advancing right after an advancement'''
+            self.cooldown_active = True
+            self.cooldown_remaining = self.cooldown_eps
+            print(f"\nStarting cooldown for {self.cooldown_eps} terminations.\n")
+
         def _boost_explore(self, num_steps):
             self.explore_boost_steps = num_steps
             vec_noise = self.model.action_noise             # VectorizedActionNoise, which is a vector of the action noise (NormalActionNoise)
@@ -149,7 +171,7 @@ def main():
             self.noise_std_backup = noise[0]._sigma.copy()  # keep a copy of the original noise stdev
 
             for i in noise:
-                i._sigma = 0.1     # increase action noise stdev for all child envs
+                i._sigma = [x+0.1 for x in i._sigma]     # increase action noise stdev for all child envs
             print(f"Action noise => {i._sigma} for {self.explore_boost_steps} steps")
 
         def _advance_agent_curriculum(self):
@@ -738,7 +760,7 @@ def main():
         result_number = f"result_{len(os.listdir(base_path))-1:05d}"
         results_path = os.path.join(base_path, result_number)
 
-        curriculum_callback = CurriculumCallback(success_window=200, threshold=0.7)
+        curriculum_callback = CurriculumCallback(success_window=200, threshold=0.75, cooldown_eps=500)
 
         # Save the result-params mapping into a json file
         trial_to_param_path = os.path.join(base_path,'trial_to_param.json')
