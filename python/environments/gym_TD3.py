@@ -99,6 +99,8 @@ def main():
             self.buffer = deque(maxlen=success_window)
             self.goal_bound_levels = np.linspace(0,1,9)
             self.goal_level_idx = 0
+            self.agent_bound_levels = np.linspace(0,1,5)
+            self.agent_level_idx = 0
 
             self.explore_boost_steps = 0            # keep count of 
 
@@ -116,11 +118,18 @@ def main():
                 success_rate = sum(self.buffer)/len(self.buffer)
                 print(f"Current training success {success_rate:3.2f}", end="\r")
 
-                # if the success rate of the past N episodes exceed success threshold, progress with curriculum for all env and restart the success tracking
+                # if the success rate of the past N episodes exceed success threshold:
+                # 1. advance the agent curriculum
+                # 2. if the agent is randomized at maximum bound, start advancing the goal curriculum 
                 if success_rate > self.success_threshold:
-                    self._advance_curriculum()
-                    self.buffer.clear()
-
+                    if self.agent_level_idx < len(self.agent_bound_levels) - 1:
+                        self._advance_agent_curriculum()
+                        self.buffer.clear()
+                    else:
+                        # self._advance_goal_curriculum()
+                        # self.buffer.clear()
+                        pass
+                    
             # handle episodes with increased action noise
             if self.explore_boost_steps > 0:
                 self.explore_boost_steps -= 1
@@ -132,14 +141,40 @@ def main():
                     
                     print(f"\nFinished with steps of increased exploration, noise reset to {i._sigma} \n")
             return True     # to continue training, return True, else return False
-    
-        def _advance_curriculum(self):
+        
+        def _boost_explore(self, num_steps):
+            self.explore_boost_steps = num_steps
+            vec_noise = self.model.action_noise             # VectorizedActionNoise, which is a vector of the action noise (NormalActionNoise)
+            noise = vec_noise.noises                        # list of NormalActionNoise instance of one environment
+            self.noise_std_backup = noise[0]._sigma.copy()  # keep a copy of the original noise stdev
+
+            for i in noise:
+                i._sigma = 0.1     # increase action noise stdev for all child envs
+            print(f"Action noise => {i._sigma} for {self.explore_boost_steps} steps")
+
+        def _advance_agent_curriculum(self):
+            ''' Function to advance the agent curriculum by
+            1. inncreasing the agent randomization bound
+            2. boost the action_noise in each environment to encourage exploratory actions'''
+
+            #--- increase the agent bound
+            env = self.model.get_env()  # vecnormalized wrapped vec env
+            vec = env.venv              # unwrap to vec env
+            self.agent_level_idx += 1
+            self.agent_level_idx = min(self.agent_level_idx, len(self.agent_bound_levels) - 1)
+
+            vec.env_method("_set_agent_bound", self.agent_bound_levels[self.agent_level_idx])
+            current_agent_bound = vec.get_attr("agent_bound")[0]      # get the actual goal_bound from one environment
+            print(f"\nIncreasing agent bound - level {self.agent_level_idx:2d} | goal_bound = {current_agent_bound:4.3f} | success_window = {self.success_window}")
+
+            #--- boost exploration for several steps
+            self._boost_explore(num_steps=1_000)
+
+        def _advance_goal_curriculum(self):
             ''' Function to advance the curriculum by
             1. increasing the goal randomization bound 
-            2. boost action_noise to increase exploration for a set number of steps 
-            3. increasing the success window and buffer size to ensure performance consistency
+            2. boost action_noise to increase exploration for a set number of steps
             '''
-
             #--- increase the goal bound
             env = self.model.get_env()  # vecnormalized wrapped vec env
             vec = env.venv              # unwrap to vec env
@@ -148,23 +183,10 @@ def main():
 
             vec.env_method("_set_goal_bound", self.goal_bound_levels[self.goal_level_idx])
             current_goal_bound = vec.get_attr("goal_bound")[0]      # get the actual goal_bound from one environment
-            #--- increase the success window and success buffer length
-            # self.success_window = int(self.success_window*1.1)
-            # self.buffer = deque(maxlen=self.success_window)
+            print(f"\nIncreasing goal bound - level {self.goal_level_idx:2d} | goal_bound = {current_goal_bound:4.3f} | success_window = {self.success_window}")
 
             #--- boost exploration for several steps
-            self.explore_boost_steps = 2_000
-            vec_noise = self.model.action_noise             # VectorizedActionNoise, which is a vector of the action noise (NormalActionNoise)
-            noise = vec_noise.noises                        # list of NormalActionNoise instance of one environment
-            self.noise_std_backup = noise[0]._sigma.copy()  # keep a copy of the original noise stdev
-
-            for i in noise:
-                i._sigma *= 2.0     # double the action noise stdev for all child env
-            print(f"\nIncreasing goal bound - level {self.goal_level_idx:2d} | goal_bound = {current_goal_bound:4.3f} | success_window = {self.success_window} | Action noise => {i._sigma} for {self.explore_boost_steps} steps")
-
-            # # Optional debug
-            # vals = vec.get_attr("goal_bound")
-            # print("\nUpdated bounds:", vals)
+            self._boost_explore(num_steps=2_000)
 
     def objective_rew_scale(trial):
         # w_head          = trial.suggest_float("w_head",     low=0.5,    high=3.0,  step=0.25)
@@ -625,13 +647,13 @@ def main():
 
     def train():
         reward_scale= {
-                "rew_head_scale": 2.0,
-                "rew_head_approach_scale": 50.0,
-                "rew_dist_scale": 2.0,
-                "rew_dist_approach_scale": 50.0,
-                "rew_time": -0.1,
+                "rew_head_scale": 0.5,
+                "rew_head_approach_scale": 100.0,
+                "rew_dist_scale": 1.0,
+                "rew_dist_approach_scale": 250.0,
+                "rew_time": -0.25,
                 "rew_goal_scale": 5_000.0,
-                "rew_obst_scale": -10_000.0
+                "rew_obst_scale": -1_000.0
             }
         
         randomization_options = {
@@ -656,7 +678,7 @@ def main():
         n_actions = env.get_attr("action_space")[0].shape[0]        # obtain the size of the action_space from the list of action_space among the n_proc subprocess envs
 
         # Hyperparameters
-        learning_rate = 1e-3
+        learning_rate=1e-3
         buffer_size=int(1e6)
         learning_starts=50_000
         batch_size=1024
@@ -664,7 +686,7 @@ def main():
         gamma=0.99
         train_freq=2
         gradient_steps=4
-        act_noise_std = 0.05
+        act_noise_std=0.0
         action_noise=NormalActionNoise(mean=np.zeros(n_actions), sigma=act_noise_std*np.ones(n_actions))     
         n_steps=1
         policy_delay=4
@@ -706,7 +728,7 @@ def main():
         
         # Training code
         # run parameters:
-        number_of_runs = 500
+        number_of_runs = 100
         steps_per_run = 20_000
         models_to_save = 20
         model_save_freq = int(number_of_runs / models_to_save)
@@ -716,7 +738,7 @@ def main():
         result_number = f"result_{len(os.listdir(base_path))-1:05d}"
         results_path = os.path.join(base_path, result_number)
 
-        curriculum_callback = CurriculumCallback(success_window=200, threshold=0.8)
+        curriculum_callback = CurriculumCallback(success_window=200, threshold=0.7)
 
         # Save the result-params mapping into a json file
         trial_to_param_path = os.path.join(base_path,'trial_to_param.json')
