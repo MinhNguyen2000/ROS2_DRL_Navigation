@@ -108,6 +108,14 @@ def main():
             self.cooldown_active = False
             self.cooldown_remaining = 0
 
+            self.term_cond = {
+                "is_success": 0,
+                "obstacle_cond": 0,
+                "dist_progress_cond": 0,
+                "head_progress_cond": 0,
+                "TimeLimit.truncated": 0
+            }
+
         def _on_step(self) -> bool:
             # grab info dict from each parallel env
             infos = self.locals["infos"]
@@ -116,9 +124,14 @@ def main():
                 if "is_success" in info:        # check terminal state in each env
                     self.buffer.append(info["is_success"])
                     if self.cooldown_active: self.cooldown_remaining -= 1
+                    for k in self.term_cond.keys():
+                        self.term_cond[k] += int(info.get(k, False))        # increment the information regarding the termination condition
+                    
                 elif info.get("TimeLimit.truncated", False):                           # in case of truncation, there is no "is_success" in info => unsuccessful
                     self.buffer.append(False)
                     if self.cooldown_active: self.cooldown_remaining -= 1
+                    for k in self.term_cond.keys():
+                        self.term_cond[k] += int(info.get(k, False))        # increment the information regarding the termination condition
 
             # cooldown episode countdown after curriculum advancement
             if self.cooldown_active and (self.cooldown_remaining <= 0): 
@@ -126,8 +139,7 @@ def main():
                 self.cooldown_remaining = 0
 
             # curriculum advancement logic
-            if (not self.cooldown_active 
-                and len(self.buffer) >= self.success_window):
+            if len(self.buffer) >= self.success_window:
 
                 success_rate = sum(self.buffer)/len(self.buffer)
                 print(f"Current training success {success_rate:3.2f}", end="\r")
@@ -135,16 +147,32 @@ def main():
                 # if the success rate of the past N episodes exceed success threshold:
                 # 1. advance the agent curriculum
                 # 2. if the agent is randomized at maximum bound, start advancing the goal curriculum 
-                if (success_rate > self.success_threshold) :
-                    if self.agent_level_idx < len(self.agent_bound_levels) - 1:
+                if (not self.cooldown_active
+                    and success_rate > self.success_threshold):
+                    success_count  = self.term_cond.get('is_success',            'no is_success')
+                    obstacle_count = self.term_cond.get('obstacle_cond',         'no obstacle_cond')
+                    stall_d_count  = self.term_cond.get('dist_progress_cond',    'no dist_progress_cond')
+                    stall_h_count  = self.term_cond.get('head_progress_cond',    'no head_progress_cond')
+                    trunc_count    = self.term_cond.get('TimeLimit.truncated',   'no TimeLimit.truncated')
+                    eps_sum = success_count + obstacle_count + stall_d_count + stall_h_count + trunc_count
+
+                    print(f"\nA={self.agent_level_idx} | G={self.goal_level_idx} | "
+                          f"success={success_count} ({success_count/eps_sum*100:5.2f}%) | "
+                          f"obstacle={obstacle_count} ({obstacle_count/eps_sum*100:5.2f}%) | "
+                          f"stall_d={stall_d_count} ({stall_d_count/eps_sum*100:5.2f}%) | "
+                          f"stall_h={stall_h_count} ({stall_h_count/eps_sum*100:5.2f}%) | "
+                          f"trunc={trunc_count} ({trunc_count/eps_sum*100:5.2f}%)")
+
+                    if self.agent_level_idx < (len(self.agent_bound_levels) - 1) // 2:      # only advance agent curriculum until agent_bound is at a third of the way
                         self._advance_agent_curriculum()
-                        self.buffer.clear()
-                        self._start_cooldown()
                     else:
-                        self._advance_goal_curriculum()
-                        self.buffer.clear()
-                        self._start_cooldown()
-                        pass
+                        if (self.agent_level_idx + self.goal_level_idx) % 2 == 0:           # alternate between agent and goal randomization
+                            self._advance_agent_curriculum()
+                        else:
+                            self._advance_goal_curriculum()
+                    self.buffer.clear()
+                    self._start_cooldown()
+                    self.term_cond = dict.fromkeys(self.term_cond, 0)       # reset all termination condition counts to 0
 
             # countdown of episodes with boosted exploration
             if self.explore_boost_steps > 0:
