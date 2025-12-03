@@ -67,7 +67,7 @@
 
     "agent_settings" : {
         "name" : "agent",
-        "radius" : 0.15,
+        "radius" : 0.2,
         "height" : 0.01,
         "contype" : 1,
         "conaffinity" : 1,
