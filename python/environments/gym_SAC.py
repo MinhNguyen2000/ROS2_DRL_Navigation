@@ -33,7 +33,7 @@ def init_model(hyperparameters : dict,
     n_proc = 24
 
     # max episode steps:
-    max_episode_steps = 1000
+    max_episode_steps = 2500
 
     # make the vectorized environment:
     env = make_vec_env("Nav2D-v0",
@@ -42,11 +42,12 @@ def init_model(hyperparameters : dict,
                                      "reward_scale_options" : reward_scale,
                                      "randomization_options" : randomization_options},
                         vec_env_cls = SubprocVecEnv,
-                        vec_env_kwargs = dict(start_method = "spawn"))
+                        vec_env_kwargs = dict(start_method = "spawn"),
+                        seed = 42)
     
     # wrap environments in a normalization wrapper:
     if normalize:
-        env = VecNormalize(env, norm_obs = True, norm_reward = True, clip_obs = 5.0)
+        env = VecNormalize(env, norm_obs = True, norm_reward = True)
 
     # make the model:
     model = SAC(policy = hyperparameters["policy"],
@@ -64,6 +65,7 @@ def init_model(hyperparameters : dict,
                 action_noise = hyperparameters["action_noise"],
                 verbose = hyperparameters["verbose"],
                 device = "cuda" if hyperparameters["gpu"] else "cpu",
+                policy_kwargs = hyperparameters["policy_kwargs"],
                 tensorboard_log = hyperparameters["tensorboard_log"])
 
     # apply custom learning rates:
@@ -119,12 +121,35 @@ def train_model(model,
                 steps_per_run : int = 25000,
                 normalize : bool = False):
     # set the model saving frequency:
-    model_save_freq = max(int(number_of_runs / 10), 1)
+    model_save_freq = max(int(number_of_runs / 20), 1)
 
     # set the model saving path:
     base_path = os.path.join(dir_path, "results", "Nav2D_SAC_SB3_results")
     result_number = f"result_{len(os.listdir(base_path)):03d}"
     results_path = os.path.join(base_path, result_number)
+
+    # save the result-params mapping into a json file:
+    trial_to_param_path = os.path.join(base_path,'trial_to_param.json')
+    if os.path.exists(trial_to_param_path):
+        with open(trial_to_param_path, "r") as f:   
+            data = json.load(f)
+    else:
+        data = {result_number: ""}
+
+    hyperparam_codified = f"{hyperparameters["policy_kwargs"]}_"
+    hyperparam_codified += f"{hyperparameters["actor_lr"]}_{hyperparameters["critic_lr"]}_{hyperparameters["buffer_size"]}_{hyperparameters["batch_size"]}_{hyperparameters["tau"]}_{hyperparameters["gamma"]}_"
+    hyperparam_codified += f"{hyperparameters["train_freq"]}_{hyperparameters["gradient_steps"]}_{hyperparameters["ent_coef"]}_{hyperparameters["target_update_interval"]}_{hyperparameters["target_entropy"]}_"
+    hyperparam_codified += f"{reward_scale['rew_head_scale']}_{reward_scale["rew_head_approach_scale"]}_{reward_scale['rew_dist_scale']}_{reward_scale['rew_dist_approach_scale']}_{reward_scale['rew_goal_scale']}_{reward_scale['rew_obst_scale']}_"
+    # hyperparam_codified += f"{reward_scale['rew_head_scale']}_{reward_scale['rew_dist_scale']}_{reward_scale['rew_goal_scale']}_{reward_scale['rew_obst_scale']}_"
+    hyperparam_codified += f"{randomization_options['agent_freq']}_{randomization_options["goal_freq"]}_{randomization_options["obstacle_freq"]}"
+
+    timestamp = datetime.now().strftime("%y%m%d_%H%M")
+    hyperparam_codified_time = f"{timestamp}_" + hyperparam_codified
+
+    data[result_number] = hyperparam_codified_time
+
+    with open(trial_to_param_path, "w") as f:
+        json.dump(data, f, indent=2)
         
     # train using model.learn():
     for run in tqdm(range(1, number_of_runs + 1), ncols = 100, colour = "#33FF00", desc = f"{result_number} training progress"):
@@ -148,28 +173,6 @@ def train_model(model,
     if normalize:
         vec_norm_env = model.get_env()
         vec_norm_env.save(os.path.join(run_dir, "vec_norm_env_stats.pkl"))
-
-    # save the result-params mapping into a json file:
-    trial_to_param_path = os.path.join(base_path,'trial_to_param.json')
-    if os.path.exists(trial_to_param_path):
-        with open(trial_to_param_path, "r") as f:   
-            data = json.load(f)
-    else:
-        data = {result_number: ""}
-
-    hyperparam_codified = f"{hyperparameters["actor_lr"]}_{hyperparameters["critic_lr"]}_{hyperparameters["buffer_size"]}_{hyperparameters["batch_size"]}_{hyperparameters["tau"]}_{hyperparameters["gamma"]}_"
-    hyperparam_codified += f"{hyperparameters["train_freq"]}_{hyperparameters["gradient_steps"]}_{hyperparameters["ent_coef"]}_{hyperparameters["target_update_interval"]}_{hyperparameters["target_entropy"]}_"
-    # hyperparam_codified += f"{reward_scale['rew_head_scale']}_{reward_scale["rew_head_approach_scale"]}_{reward_scale['rew_dist_scale']}_{reward_scale['rew_dist_approach_scale']}_{reward_scale['rew_goal_scale']}_{reward_scale['rew_obst_scale']}_"
-    hyperparam_codified += f"{reward_scale['rew_head_scale']}_{reward_scale['rew_dist_scale']}_{reward_scale['rew_goal_scale']}_{reward_scale['rew_obst_scale']}_"
-    hyperparam_codified += f"{randomization_options['agent_freq']}_{randomization_options["goal_freq"]}_{randomization_options["obstacle_freq"]}"
-
-    timestamp = datetime.now().strftime("%y%m%d_%H%M")
-    hyperparam_codified_time = f"{timestamp}_" + hyperparam_codified
-
-    data[result_number] = hyperparam_codified_time
-
-    with open(trial_to_param_path, "w") as f:
-        json.dump(data, f, indent=2)
 
     # close the environment:
     env.close()
@@ -258,59 +261,66 @@ def main(do_studies : bool = False,
     tensorboard_log_dir = os.path.join(dir_path, "results", "Nav2D_SAC_SB3_tensorboard")
 
     # set the training parameters:
-    number_of_runs = 50
+    number_of_runs = 100
     steps_per_run = 50_000
 
     # if not using optuna:
     if not do_studies:
-        # reward_scale:
-        reward_scale = {"rew_dist_scale" : 1.0,
-                        "rew_dist_approach_scale" : 250.0,
-                        "rew_head_scale" : 1.0,
-                        "rew_head_approach_scale" : 250.0,
-                        "rew_goal_scale" : 10_000.0,
-                        "rew_obst_scale" : -1000.0, 
-                        "rew_time" : -0.25}
-        
-        randomization_options = {"agent_freq" : 1,
-                        "goal_freq" : 1,
-                        "obstacle_freq" : 1}
-        
-        # model hyperparameters:
-        hyperparameters = {"policy" : "MlpPolicy",
-                        "gamma" : 0.99,
-                        "actor_lr" : 3e-4,
-                        "critic_lr" : 3e-4,
-                        "buffer_size" : int(1e6),
-                        "batch_size" : 512,
-                        "tau" : 5e-3,
-                        "ent_coef" : "auto_0.1",
-                        "train_freq" : 1,
-                        "learning_starts" : 0,
-                        "target_update_interval" : 1,
-                        "gradient_steps" : 4,
-                        "target_entropy" : "-2",
-                        "action_noise" : None,
-                        "verbose" : 0, 
-                        "gpu" : True,
-                        "tensorboard_log" : tensorboard_log_dir}
-        
-        # get the model and the environment:
-        env, model = init_model(hyperparameters = hyperparameters, 
-                                reward_scale = reward_scale,
-                                randomization_options = randomization_options,
-                                normalize = normalize)
-        
-        # train the model:
-        train_model(model = model, 
-                    env = env,
-                    dir_path = dir_path,
-                    reward_scale = reward_scale,
-                    randomization_options = randomization_options,
-                    hyperparameters = hyperparameters,
-                    number_of_runs = number_of_runs,
-                    steps_per_run = steps_per_run,
-                    normalize = normalize)
+        for i in [1.5, 2.0, 2.5, 3.0, 3.5]:
+            # reward_scale:
+            reward_scale = {
+                            "rew_dist_scale" : 0.0,
+                            "rew_dist_approach_scale" : 250.0*i,
+                            "rew_head_scale" : 0.25,
+                            "rew_head_approach_scale" : 0.0,
+                            "rew_goal_scale" : 2_500.0,
+                            "rew_obst_scale" : -500.0, 
+                            "rew_time" : -0.1}
+            
+            randomization_options = {"agent_freq" : 1,
+                            "goal_freq" : 1,
+                            "obstacle_freq" : 1}
+            
+            # model hyperparameters:
+            actor_arch = [256, 256]
+            policy_arch = [256, 256]
+            policy_kwargs = {"net_arch" : {"pi" : actor_arch, "qf" : policy_arch}}
+
+            hyperparameters = {"policy" : "MlpPolicy",
+                            "gamma" : 0.99,
+                            "actor_lr" : 3e-4,
+                            "critic_lr" : 3e-4,
+                            "buffer_size" : int(1e6),
+                            "batch_size" : 1024,
+                            "tau" : 5e-3,
+                            "ent_coef" : "auto_0.1",
+                            "train_freq" : 1,
+                            "learning_starts" : 50_000,
+                            "target_update_interval" : 1,
+                            "gradient_steps" : 4,
+                            "target_entropy" : "-2",
+                            "action_noise" : None,
+                            "verbose" : 0, 
+                            "gpu" : True,
+                            "policy_kwargs": policy_kwargs,
+                            "tensorboard_log" : tensorboard_log_dir}
+            
+            # get the model and the environment:
+            env, model = init_model(hyperparameters = hyperparameters, 
+                                    reward_scale = reward_scale,
+                                    randomization_options = randomization_options,
+                                    normalize = normalize)
+            
+            # train the model:
+            train_model(model = model, 
+                        env = env,
+                        dir_path = dir_path,
+                        reward_scale = reward_scale,
+                        randomization_options = randomization_options,
+                        hyperparameters = hyperparameters,
+                        number_of_runs = number_of_runs,
+                        steps_per_run = steps_per_run,
+                        normalize = normalize)
             
     # if using optuna:
     else:
