@@ -66,7 +66,7 @@ class Nav2D(MujocoEnv):
         with open(json_path) as f:
             params = json.load(f)
         self.size = params["ground_settings"]["internal_length"]
-        self.agent_radius = params["agent_settings"]["radius"]
+        self.agent_radius = params["agent_footprint_settings"]["radius"]
 
         scaled_inner_length = 2 * (self.size - self.agent_radius)
         self.dmax = np.sqrt(2 * scaled_inner_length ** 2, dtype = np.float32)
