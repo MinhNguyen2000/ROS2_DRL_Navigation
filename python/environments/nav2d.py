@@ -286,6 +286,7 @@ class Nav2D(MujocoEnv):
             dx, dy = (qpos[3:5] + self ._task_loc) - (qpos[0:2] + self._agent_loc)
             bearing = np.arctan2(dy, dx, dtype=np.float32) % (2*np.pi)
             qpos[2] = self.np_random.uniform(size = 1, low = bearing - self.angle_bound / 2, high = bearing + self.angle_bound / 2) % (2 * np.pi)
+            # qpos[2] = self.np_random.uniform(size = 1, low = 0.0, high = np.pi/2)
 
             # randomize the velocity of the agent:
             qvel[0:2] = self.np_random.uniform(size = 2, low = noise_low, high = noise_high)
