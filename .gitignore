@@ -60,4 +60,4 @@ testing.py
 results/
 
 # testing directory - can be kept local, just for playing around with newer features and stuff:
-/python/environments/testing/.
+python/environments/testing/
