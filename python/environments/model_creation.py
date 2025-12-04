@@ -6,6 +6,7 @@ this file contains the MakeEnv class.
 import mujoco as mj
 import mujoco.viewer
 import numpy as np
+import os
 
 # define main class for creating the environment:
 class MakeEnv:
@@ -27,6 +28,9 @@ class MakeEnv:
                         and the ``task_settings``.      
 
         """
+        # add params to self:
+        self.params = params
+
         ### OBJECT PARAMETERS ###
         # env settings:
         self.env_name = params["env_settings"]["name"]
@@ -93,14 +97,33 @@ class MakeEnv:
         self.ground_size = [self.ground_actual_length, self.ground_actual_length, self.ground_z_spacing]
         self.ground_pos = params["ground_settings"]["pos"]
         self.ground_rgba = params["ground_settings"]["rgba"]
-
-        # agent settings:
+        
+        # global agent settings:
         self.agent_name = params["agent_settings"]["name"]
-        self.agent_radius = params["agent_settings"]["radius"]
-        self.agent_height = params["agent_settings"]["height"]
-        self.agent_contype = params["agent_settings"]["contype"]
-        self.agent_conaffinity = params["agent_settings"]["conaffinity"]
-        self.agent_rgba = params["agent_settings"]["rgba"]
+
+        # agent mesh settings:
+        self.mesh_name = params["agent_mesh_settings"]["name"]
+        self.mesh_file_name = params["agent_mesh_settings"]["file_name"]
+        self.mesh_contype = params["agent_mesh_settings"]["contype"]
+        self.mesh_conaffinity = params["agent_mesh_settings"]["conaffinity"]
+        self.mesh_euler = params["agent_mesh_settings"]["euler"]
+        self.mesh_pos = params["agent_mesh_settings"]["pos"]
+
+        # agent footprint settings:
+        self.footprint_name = params["agent_footprint_settings"]["name"]
+        self.footprint_radius = params["agent_footprint_settings"]["radius"]
+        self.footprint_height = params["agent_footprint_settings"]["height"]
+        self.footprint_contype = params["agent_footprint_settings"]["contype"]
+        self.footprint_conaffinity = params["agent_footprint_settings"]["conaffinity"]
+        self.footprint_rgba = params["agent_footprint_settings"]["rgba"]
+
+        # # agent settings:
+        # self.agent_name = params["agent_settings"]["name"]
+        # self.agent_radius = params["agent_settings"]["radius"]
+        # self.agent_height = params["agent_settings"]["height"]
+        # self.agent_contype = params["agent_settings"]["contype"]
+        # self.agent_conaffinity = params["agent_settings"]["conaffinity"]
+        # self.agent_rgba = params["agent_settings"]["rgba"]
 
         # task settings:
         self.task_radius = params["task_settings"]["radius"]
@@ -144,6 +167,11 @@ class MakeEnv:
                               height = self.skybox_height, 
                               rgb1 = self.skybox_rgb1,
                               rgb2 = self.skybox_rgb2)
+        
+        # add the mesh:
+        self.spec.add_mesh(name = self.mesh_name,
+                           file = os.path.join(os.getcwd(), self.mesh_file_name),
+                           scale = [1/1000, 1/1000, 1/1000])
         
         # add the light:
         self.spec.worldbody.add_light(name = self.light_name,
@@ -200,12 +228,30 @@ class MakeEnv:
         self.agent.add_joint(name = "agent_x_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [1, 0, 0])
         self.agent.add_joint(name = "agent_y_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [0, 1, 0])
         self.agent.add_joint(name = "agent_z_yaw", type = mj.mjtJoint.mjJNT_HINGE, axis = [0, 0, 1])
-        self.agent.add_geom(name = "agent_body", 
-                            type = mj.mjtGeom.mjGEOM_CYLINDER, 
-                            size = [self.agent_radius, self.agent_height, 0], 
-                            contype = self.agent_contype, 
-                            conaffinity = self.agent_conaffinity, 
-                            rgba = self.agent_rgba)
+
+        self.agent.add_geom(name = self.mesh_name,
+                            type = mj.mjtGeom.mjGEOM_MESH, 
+                            meshname = self.mesh_name,
+                            contype = self.mesh_contype,
+                            conaffinity = self.mesh_conaffinity,
+                            euler = self.mesh_euler,
+                            pos = self.mesh_pos
+                            )
+        
+        self.agent_footprint = self.agent.add_body(name = self.footprint_name)
+        self.agent_footprint.add_geom(name = self.footprint_name, 
+                                    type = mj.mjtGeom.mjGEOM_CYLINDER,
+                                    size = [self.footprint_radius, self.footprint_height, 0], 
+                                    contype = self.footprint_contype,
+                                    conaffinity = self.footprint_conaffinity,
+                                    rgba = self.footprint_rgba)
+
+        # self.agent.add_geom(name = "agent_body", 
+        #                     type = mj.mjtGeom.mjGEOM_CYLINDER, 
+        #                     size = [self.agent_radius, self.agent_height, 0], 
+        #                     contype = self.agent_contype, 
+        #                     conaffinity = self.agent_conaffinity, 
+        #                     rgba = self.agent_rgba)
 
     # function for adding the lidar:
     def add_lidar(self, n_rays: int):
@@ -229,7 +275,7 @@ class MakeEnv:
         # add sites and rangefinders:
         for i in range(self.n_rays + 1):
             # place a site:
-            self.agent.add_site(name = f"lidar_site_{i}", pos = [0, 0, self.agent_height], euler = [-90, 90 + i * self.resolution, 0])
+            self.agent.add_site(name = f"lidar_site_{i}", pos = [0, 0, 0.0614 + 0.08285], euler = [-90, 90 + i * self.resolution, 0])
             self.spec.add_sensor(name = f"lidar_ray_{i}",
                                  type = mj.mjtSensor.mjSENS_RANGEFINDER, 
                                  objtype = mj.mjtObj.mjOBJ_SITE,
@@ -274,18 +320,18 @@ class MakeEnv:
         
         """
         # verify that the provided agent position is feasible:
-        if abs(agent_pos[0]) + self.agent_radius > self.ground_internal_length or abs(agent_pos[1]) + self.agent_radius > self.ground_internal_length:
+        if abs(agent_pos[0]) + self.footprint_radius > self.ground_internal_length or abs(agent_pos[1]) + self.footprint_radius > self.ground_internal_length:
             raise ValueError("Provided position of the agent is outside the internal area of the arena!")
         
         # verify that the provided task position is feasible:
-        if abs(task_pos[0]) + self.agent_radius > self.ground_internal_length or abs(task_pos[1]) + self.agent_radius > self.ground_internal_length:
+        if abs(task_pos[0]) + self.footprint_radius > self.ground_internal_length or abs(task_pos[1]) + self.footprint_radius > self.ground_internal_length:
             raise ValueError("Provided position of the task is unreachable by the agent!")
 
         # initialize the spec:
         self.make_spec()
 
         # add the agent:
-        self.add_agent(agent_pos = [agent_pos[0], agent_pos[1], self.agent_height])
+        self.add_agent(agent_pos = [agent_pos[0], agent_pos[1], self.footprint_height])
 
         # add the lidar:
         self.add_lidar(n_rays)
