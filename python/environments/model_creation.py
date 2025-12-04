@@ -170,7 +170,7 @@ class MakeEnv:
         
         # add the mesh:
         self.spec.add_mesh(name = self.mesh_name,
-                           file = os.path.join(os.getcwd(), f"python/environments/{self.mesh_file_name}"),
+                           file = os.path.join(os.getcwd(), self.mesh_file_name),
                            scale = [1/1000, 1/1000, 1/1000])
         
         # add the light:
