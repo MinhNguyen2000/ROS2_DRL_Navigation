@@ -169,8 +169,10 @@ class MakeEnv:
                               rgb2 = self.skybox_rgb2)
         
         # add the mesh:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        mesh_path = os.path.join(base_path, self.mesh_file_name)
         self.spec.add_mesh(name = self.mesh_name,
-                           file = os.path.join(os.getcwd(), self.mesh_file_name),
+                           file = mesh_path,
                            scale = [1/1000, 1/1000, 1/1000])
         
         # add the light:
