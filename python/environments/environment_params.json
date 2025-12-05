@@ -22,7 +22,7 @@
         "zfar"          : 50.0,
         "shadowsize"    : 4096,
         "framelength"   : 2.0,
-        "framewidth"    : 0.1,
+        "framewidth"    : 0.05,
         "jointlength"   : 2.0,
         "jointwidth"    : 0.05
     },
