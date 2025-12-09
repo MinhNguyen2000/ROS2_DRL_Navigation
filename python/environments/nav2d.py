@@ -182,13 +182,14 @@ class Nav2D(MujocoEnv):
 
         order of the bounds:
             (2, ): the dx and dy components of how far the agent is from the goal
+            (1, ): the distance between the agent and the goal
             (2, ): the cos(theta) and sin(theta) components of the agent's heading
             (2, ): the cos() and sin() componets of the relative bearing
             (n_rays, ): LiDAR scans
 
         '''
         # define the obs_space_size:
-        self._obs_space_size = 2 + 2 + 2 + self.n_rays
+        self._obs_space_size = 2 + 1 + 2 + 2 + self.n_rays
 
         # initialize the scale on the observation space as being between [-1, 1]:
         low  = -np.ones((self._obs_space_size, ), dtype = np.float32) 
@@ -198,9 +199,13 @@ class Nav2D(MujocoEnv):
         low[0:2]  = -2 * (self.size - self.agent_radius)
         high[0:2] =  2 * (self.size - self.agent_radius)
 
+        # d_goal bounds 
+        low[2]    = 0
+        high[2]   = self.dmax
+        
         # LiDAR bounds
-        low[6:]  = 0.0
-        high[6:] = self.dmax + np.sqrt(2 * self.agent_radius**2)
+        low[7:]  = 0.0
+        high[7:] = self.dmax + np.sqrt(2 * self.agent_radius**2)
 
         # set the observation space:
         self.observation_space = gym.spaces.Box(
@@ -234,7 +239,9 @@ class Nav2D(MujocoEnv):
         
         Returns: obs_buffer containing
             (2, ): the dx and dy components of how far the agent is from the goal
+            (1, ): the distance between the agent and the goal
             (2, ): the cos(theta) and sin(theta) components of the agent's heading
+            (2, ): the cos() and sin() components of the relative bearing
             (n_rays, ): normalized LiDAR scans
         '''
         # need to compute the dx and dy between the agent and the goal:
@@ -248,15 +255,16 @@ class Nav2D(MujocoEnv):
         # calculate the relative bearing from the agent to the goal
         bearing = np.arctan2(dy,        dx,         dtype = np.float32) % (2 * np.pi)
         heading = np.arctan2(s_theta,   c_theta,    dtype = np.float32) % (2 * np.pi)
-        rel_bearing = abs((bearing - heading + np.pi) % (2*np.pi) - np.pi)
+        rel_bearing = (bearing - heading + np.pi) % (2*np.pi) - np.pi
         c_bearing = np.cos(rel_bearing, dtype=np.float32)
         s_bearing = np.sin(rel_bearing, dtype=np.float32) 
 
         #--- modify obs buffer inplace instead of concatenation overhead (time + memory):
         self._obs_buffer[0:2] = dx, dy
-        self._obs_buffer[2:4] = c_theta, s_theta
-        self._obs_buffer[4:6] = c_bearing, s_bearing
-        self._obs_buffer[6:]  = self.data.sensordata[:-1]
+        self._obs_buffer[2]   = np.sqrt(dx ** 2 + dy ** 2)
+        self._obs_buffer[3:5] = c_theta, s_theta
+        self._obs_buffer[5:7] = c_bearing, s_bearing
+        self._obs_buffer[7:]  = self.data.sensordata[:-1]
 
         return self._obs_buffer
 
@@ -303,12 +311,13 @@ class Nav2D(MujocoEnv):
 
         # get the previous d_goal:
         dx, dy = ob[0:2]
-        self.d_goal_last = np.sqrt(dx**2  + dy**2)      # to track distance approach progress
+        self.d_goal_last = ob[2]                        # to track distance approach progress
         self.d_init = self.d_goal_last                  # to track overall distance progress
    
         # get the initial abs_diff
-        c_bearing, s_bearing = ob[4:6]
-        self.prev_abs_diff = np.arctan2(s_bearing, c_bearing, dtype=np.float32)
+        c_bearing, s_bearing = ob[5:7]
+        self.prev_abs_diff = abs(np.arctan2(s_bearing, c_bearing, dtype=np.float32))
+        self.abs_diff_init = self.prev_abs_diff
 
         # reset the distance progress count
         self.dist_progress_count = 0
@@ -406,16 +415,18 @@ class Nav2D(MujocoEnv):
         # 2. collect the new observation (LiDAR simulation, location of agent/goal using the custom _get_obs())
         nobs = self._get_obs()      # this is [d_goal, abs_diff, LiDAR]
         dx, dy                  = nobs[0:2]
-        c_theta, s_theta        = nobs[2:4]
-        c_bearing, s_bearing    = nobs[4:6]
-        lidar_obs               = nobs[6:]
+        d_goal                  = nobs[2]
+        c_theta, s_theta        = nobs[3:5]
+        c_bearing, s_bearing    = nobs[5:7]
+        lidar_obs               = nobs[7:]
 
         # get the cartesian distance between the agent and the goal:
-        d_goal = np.sqrt(dx**2  + dy**2)
+        d_goal = d_goal
 
         # get the difference between the agents current heading, and the required heading:
         heading  = np.arctan2(s_theta, c_theta) % (2 * np.pi)
-        abs_diff = np.arctan2(s_bearing, c_bearing)
+        bearing  = np.arctan2(s_bearing, c_bearing)
+        abs_diff = abs(bearing)
 
         # 3. termination conditions: 
         # when the agent is close to the goal:
