@@ -55,7 +55,9 @@ class Nav2D(MujocoEnv):
         self.camera_name = camera_name
         self.camera_id = camera_id
         self.frame_skip = frame_skip
-        self.n_rays = 8
+        self.n_rays = 360
+        self.n_ray_groups = 8
+        self._ray_per_group = int(self.n_rays/self.n_ray_groups)
 
         self.linear_scale = 2
         self.angular_scale = 3
@@ -90,7 +92,8 @@ class Nav2D(MujocoEnv):
         
         #--- pre allocate observation array once
         self._obs_buffer = np.zeros(self._obs_space_size, dtype = np.float32)
-        
+        self._lidar_buffer = np.zeros(self.n_ray_groups, dtype=np.float32)
+
         # --- ACTION SPACE INITIALIZATION
         self._set_action_space()
 
@@ -185,11 +188,11 @@ class Nav2D(MujocoEnv):
             (1, ): the distance between the agent and the goal
             (2, ): the cos(theta) and sin(theta) components of the agent's heading
             (2, ): the cos() and sin() componets of the relative bearing
-            (n_rays, ): LiDAR scans
+            (n_ray_grous, ): minpooled groups of LiDAR scans
 
         '''
         # define the obs_space_size:
-        self._obs_space_size = 2 + 1 + 2 + 2 + self.n_rays
+        self._obs_space_size = 2 + 1 + 2 + 2 + self.n_ray_groups
 
         # initialize the scale on the observation space as being between [-1, 1]:
         low  = -np.ones((self._obs_space_size, ), dtype = np.float32) 
@@ -242,7 +245,7 @@ class Nav2D(MujocoEnv):
             (1, ): the distance between the agent and the goal
             (2, ): the cos(theta) and sin(theta) components of the agent's heading
             (2, ): the cos() and sin() components of the relative bearing
-            (n_rays, ): normalized LiDAR scans
+            (n_ray_groups, ): minpooled groups of LiDAR scans
         '''
         # need to compute the dx and dy between the agent and the goal:
         dx, dy = self.data.xpos[self.goal_id][:2] - self.data.xpos[self.agent_id][:2]
@@ -257,14 +260,18 @@ class Nav2D(MujocoEnv):
         heading = np.arctan2(s_theta,   c_theta,    dtype = np.float32) % (2 * np.pi)
         rel_bearing = (bearing - heading + np.pi) % (2*np.pi) - np.pi
         c_bearing = np.cos(rel_bearing, dtype=np.float32)
-        s_bearing = np.sin(rel_bearing, dtype=np.float32) 
+        s_bearing = np.sin(rel_bearing, dtype=np.float32)
+    
+        lidar = self.data.sensordata[:-1]
+        for i in range(self.n_ray_groups):
+            self._lidar_buffer[i] = np.min(lidar[self._ray_per_group*i:self._ray_per_group*(i+1)])
 
         #--- modify obs buffer inplace instead of concatenation overhead (time + memory):
         self._obs_buffer[0:2] = dx, dy
         self._obs_buffer[2]   = np.sqrt(dx ** 2 + dy ** 2)
         self._obs_buffer[3:5] = c_theta, s_theta
         self._obs_buffer[5:7] = c_bearing, s_bearing
-        self._obs_buffer[7:]  = self.data.sensordata[:-1]
+        self._obs_buffer[7:]  = self._lidar_buffer
 
         return self._obs_buffer
 
