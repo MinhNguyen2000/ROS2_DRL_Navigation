@@ -268,13 +268,13 @@ def main(do_studies : bool = False,
     if not do_studies:
         # reward_scale:
         reward_scale = {
-                        "rew_dist_scale" : 0.5,
-                        "rew_dist_approach_scale" : 50.0,
-                        "rew_head_scale" : 0.5,
-                        "rew_head_approach_scale" : 100.0,
+                        "rew_dist_scale" : 0.0,
+                        "rew_dist_approach_scale" : 250*1.5,
+                        "rew_head_scale" : 0.25,
+                        "rew_head_approach_scale" : 0.0,
                         "rew_goal_scale" : 5000.0,
                         "rew_obst_scale" : -1000.0, 
-                        "rew_time" : -0.05}
+                        "rew_time" : -0.1}
         
         randomization_options = {"agent_freq" : 1,
                         "goal_freq" : 1,
@@ -287,8 +287,8 @@ def main(do_studies : bool = False,
 
         hyperparameters = {"policy" : "MlpPolicy",
                         "gamma" : 0.99,
-                        "actor_lr" : 3e-5,
-                        "critic_lr" : 3e-4,
+                        "actor_lr" : 3e-3,
+                        "critic_lr" : 3e-3,
                         "buffer_size" : int(2e6),
                         "batch_size" : 2048,
                         "tau" : 5e-3,
