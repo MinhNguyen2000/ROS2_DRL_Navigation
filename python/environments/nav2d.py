@@ -475,8 +475,14 @@ class Nav2D(MujocoEnv):
             self.rew_dist_approach_scaled = self.rew_dist_approach_scale * rew_dist_approach
 
             # --- ALIGNMENT REWARD:
-            rew_head = 1 + np.cos(abs_diff)
-            self.rew_head_scaled = self.rew_head_scale * rew_head
+            rew_head = 1 - np.tanh(2 * abs_diff)
+
+            # --- SMALL ANGLE ALIGNMENT REWARD:
+            angle_threshold_rad = np.deg2rad(5)
+            if abs_diff < angle_threshold_rad:
+                rew_head += 1
+
+            self.rew_head_scaled = self.rew_head_scale * rew_head  
 
             # --- TOTAL REWARD:
             rew = self.rew_dist_approach_scaled + self.rew_head_scaled + self.rew_time
