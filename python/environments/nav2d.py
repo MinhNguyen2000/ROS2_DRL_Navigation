@@ -471,27 +471,52 @@ class Nav2D(MujocoEnv):
         elif obstacle_cond:
             rew = self.rew_obst_scale
         else:
-            # --- APPROACH REWARD:
-            rew_dist_approach = self.d_goal_last - d_goal
-            self.rew_dist_approach_scaled = self.rew_dist_approach_scale * rew_dist_approach
+            #--- DISTANCE REWARD:
+            # this reward term incentivizes closing the distance between the agent and the goal:
+            rew_dist = (self.d_init - d_goal) / self.d_init         # distance reward relative to the starting state 
+            self.rew_dist_scaled = self.rew_dist_scale * rew_dist
 
-            # --- ALIGNMENT REWARD:
-            rew_head = 1 - np.tanh(2 * abs_diff)
+            #--- DISTANCE APPROACH REWARD:
+            rew_dist_approach = max((self.d_goal_last - d_goal), 0)
+            self.rew_dist_approach_scaled = rew_dist_approach * self.rew_dist_approach_scale
 
-            # --- SMALL ANGLE ALIGNMENT REWARD:
-            angle_threshold_rad = np.deg2rad(5)
-            if abs_diff < angle_threshold_rad:
-                rew_head += 1
+            #---  BASE HEADING REWARD:
+            # penalize based on the absolute difference in heading:
+            rew_head = 1.0 - np.tanh(abs_diff / np.pi)
 
-            self.rew_head_scaled = self.rew_head_scale * rew_head  
+            # bonus reward for being within +/- 5 degree of the desired trajectory:
+            angle_threshold_rad = np.deg2rad(2.5)
+            if abs_diff <= angle_threshold_rad:
+                rew_head += 1 - 1 / angle_threshold_rad * abs_diff
 
-            # --- TOTAL REWARD:
-            rew = self.rew_dist_approach_scaled + self.rew_head_scaled + self.rew_time
+            # scale reward:
+            self.rew_head_scaled = self.rew_head_scale * rew_head
 
-            # --- PRINT TO USER:
+            #--- HEADING APPROACH REWARD:
+            rew_head_approach = max((self.prev_abs_diff - abs_diff), 0)
+            self.rew_head_approach_scaled = self.rew_head_approach_scale * rew_head_approach
+
+            #--- TOTAL REWARD TERM:
+            rew = self.rew_head_scaled + self.rew_head_approach_scaled + self.rew_dist_scaled + self.rew_dist_approach_scaled + self.rew_time
+            # rew = self.rew_dist_scaled + self.rew_dist_approach_scaled + self.rew_head_scaled + self.rew_time
+
+            # print to user:
             if self.render_mode == "human":
-                print(f" @ episode {self.episode_counter} | rew_dist_approach: {self.rew_dist_approach_scaled:.4f} | rew_head: {self.rew_head_scaled:.4f} | total: {rew:.5f}                              ", end = "\r")
+                # # observation debug
+                # print(f" @ episode {self.episode_counter} | (dx,dy)=({dx:4.2f},{dy:4.2f}) | theta={heading/np.pi*180: 5.2f} | d_goal: {d_goal:5.3f}  |  bearing: {bearing/np.pi*180: 5.2f}  |  abs_diff: {abs_diff/np.pi*180: 5.2f}      ", end="\r")
 
+                # # lidar debug
+                # print(lidar_obs)
+
+                # # reward debug
+                # print(f" @ episode {self.episode_counter} | "
+                #       f"rew_dist: {self.rew_dist_scaled: 6.4f} | "
+                #       f"rew_dist_app: {self.rew_dist_scaled: 6.4f} | "
+                #       f"rew_head: {self.rew_head_scaled: 6.4f} | "
+                #       f"rew_head_app: {self.rew_head_approach_scaled: 6.4f}        ",
+                #       end="\r")
+                pass
+                
         # advance histories:
         self.d_goal_last = d_goal
         self.prev_abs_diff = abs_diff
