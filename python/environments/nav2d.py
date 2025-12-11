@@ -134,6 +134,13 @@ class Nav2D(MujocoEnv):
         self.agent_id = self.model.body("agent").id
         self.goal_id = self.model.body("goal").id
 
+        # --- TERMINATION CONDITION INITILIZATION
+        self.distance_threshold = self.agent_radius
+        self.dist_progress_count = 0
+        self.head_progress_count = 0
+        self.progress_threshold = 100 if not is_eval else 500   # number of maximum allowable episodes where the agent has not made any progress toward the goal
+        self.obstacle_threshold = 0.05 + self.agent_radius
+
         # --- RANDOMIZATION INITIALIZATION
         self.episode_counter = 0
         self.agent_frequency    = randomization_options.get("agent_freq", 1)    if randomization_options else 1
@@ -145,21 +152,15 @@ class Nav2D(MujocoEnv):
         self.obstacle_randomize = False
 
         # agent randomization bounds
-        self.agent_bound_final = self.size - self.agent_radius
+        self.agent_bound_init  = 2 * self.agent_radius
+        self.agent_bound_final = self.size - self.obstacle_threshold
         self.agent_bound = self.agent_bound_final
         self.angle_bound = np.pi
 
         # goal randomization bounds
         self.goal_bound_init = 0
-        self.goal_bound_final = self.size - 2*self.agent_radius
+        self.goal_bound_final = self.size - 2 * self.agent_radius
         self.goal_bound = self.goal_bound_final
-
-        # --- TERMINATION CONDITION INITILIZATION
-        self.distance_threshold = self.agent_radius
-        self.dist_progress_count = 0
-        self.head_progress_count = 0
-        self.progress_threshold = 100   # number of maximum allowable episodes where the agent has not made any progress toward the goal
-        self.obstacle_threshold = 0.05 + self.agent_radius
 
         # --- REWARD SCALE INITIALIZATION
         self.rew_dist_scale             = reward_scale_options.get("rew_dist_scale", 1)             if reward_scale_options else 1
