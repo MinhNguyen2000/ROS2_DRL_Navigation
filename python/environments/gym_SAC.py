@@ -261,66 +261,65 @@ def main(do_studies : bool = False,
     tensorboard_log_dir = os.path.join(dir_path, "results", "Nav2D_SAC_SB3_tensorboard")
 
     # set the training parameters:
-    number_of_runs = 100
+    number_of_runs = 200
     steps_per_run = 50_000
 
     # if not using optuna:
     if not do_studies:
-        for i in [1.5, 2.0, 2.5, 3.0, 3.5]:
-            # reward_scale:
-            reward_scale = {
-                            "rew_dist_scale" : 0.0,
-                            "rew_dist_approach_scale" : 250.0*i,
-                            "rew_head_scale" : 0.25,
-                            "rew_head_approach_scale" : 0.0,
-                            "rew_goal_scale" : 2_500.0,
-                            "rew_obst_scale" : -500.0, 
-                            "rew_time" : -0.1}
-            
-            randomization_options = {"agent_freq" : 1,
-                            "goal_freq" : 1,
-                            "obstacle_freq" : 1}
-            
-            # model hyperparameters:
-            actor_arch = [256, 256]
-            policy_arch = [256, 256]
-            policy_kwargs = {"net_arch" : {"pi" : actor_arch, "qf" : policy_arch}}
+        # reward_scale:
+        reward_scale = {
+                        "rew_dist_scale" : 0.5,
+                        "rew_dist_approach_scale" : 50.0,
+                        "rew_head_scale" : 0.5,
+                        "rew_head_approach_scale" : 100.0,
+                        "rew_goal_scale" : 5000.0,
+                        "rew_obst_scale" : -1000.0, 
+                        "rew_time" : -0.05}
+        
+        randomization_options = {"agent_freq" : 1,
+                        "goal_freq" : 1,
+                        "obstacle_freq" : 1}
+        
+        # model hyperparameters:
+        actor_arch = [256, 256]
+        critic_arch = [256, 256]
+        policy_kwargs = {"net_arch" : {"pi" : actor_arch, "qf" : critic_arch}}
 
-            hyperparameters = {"policy" : "MlpPolicy",
-                            "gamma" : 0.99,
-                            "actor_lr" : 3e-4,
-                            "critic_lr" : 3e-4,
-                            "buffer_size" : int(1e6),
-                            "batch_size" : 1024,
-                            "tau" : 5e-3,
-                            "ent_coef" : "auto_0.1",
-                            "train_freq" : 1,
-                            "learning_starts" : 50_000,
-                            "target_update_interval" : 1,
-                            "gradient_steps" : 4,
-                            "target_entropy" : "-2",
-                            "action_noise" : None,
-                            "verbose" : 0, 
-                            "gpu" : True,
-                            "policy_kwargs": policy_kwargs,
-                            "tensorboard_log" : tensorboard_log_dir}
-            
-            # get the model and the environment:
-            env, model = init_model(hyperparameters = hyperparameters, 
-                                    reward_scale = reward_scale,
-                                    randomization_options = randomization_options,
-                                    normalize = normalize)
-            
-            # train the model:
-            train_model(model = model, 
-                        env = env,
-                        dir_path = dir_path,
-                        reward_scale = reward_scale,
-                        randomization_options = randomization_options,
-                        hyperparameters = hyperparameters,
-                        number_of_runs = number_of_runs,
-                        steps_per_run = steps_per_run,
-                        normalize = normalize)
+        hyperparameters = {"policy" : "MlpPolicy",
+                        "gamma" : 0.99,
+                        "actor_lr" : 3e-5,
+                        "critic_lr" : 3e-4,
+                        "buffer_size" : int(2e6),
+                        "batch_size" : 2048,
+                        "tau" : 5e-3,
+                        "ent_coef" : "auto_0.1",
+                        "train_freq" : 1,
+                        "learning_starts" : 50_000,
+                        "target_update_interval" : 1,
+                        "gradient_steps" : 4,
+                        "target_entropy" : "auto",
+                        "action_noise" : None,
+                        "verbose" : 0, 
+                        "gpu" : True,
+                        "policy_kwargs": policy_kwargs,
+                        "tensorboard_log" : tensorboard_log_dir}
+        
+        # get the model and the environment:
+        env, model = init_model(hyperparameters = hyperparameters, 
+                                reward_scale = reward_scale,
+                                randomization_options = randomization_options,
+                                normalize = normalize)
+        
+        # train the model:
+        train_model(model = model, 
+                    env = env,
+                    dir_path = dir_path,
+                    reward_scale = reward_scale,
+                    randomization_options = randomization_options,
+                    hyperparameters = hyperparameters,
+                    number_of_runs = number_of_runs,
+                    steps_per_run = steps_per_run,
+                    normalize = normalize)
             
     # if using optuna:
     else:
