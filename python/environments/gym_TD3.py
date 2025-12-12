@@ -251,7 +251,167 @@ def main():
         mean_dfinal     = np.mean(dfinal_window)/max_env_size
 
         return mean_success, mean_ep_len, mean_dfinal
-    
+
+    class CurriculumCallback(BaseCallback):
+        def __init__(self, 
+                     success_window:int = 100, 
+                     threshold:float=0.9, 
+                     debug:bool=False):
+            super().__init__()
+            self.success_threshold = threshold
+            self.success_window = success_window
+            self.buffer = deque(maxlen=success_window)
+
+            self.n_levels = 40
+            self.goal_bound_levels = np.linspace(0,1,self.n_levels+1)
+            self.goal_level_idx = 0
+            self.agent_bound_levels = np.linspace(0,1,self.n_levels+1)
+            self.agent_level_idx = 0
+
+            self.explore_boost_steps = 0     # keep count of the number of steps with increased exploration (higher action noise)
+            self.explore_boost_active = False
+
+            self.cooldown_eps = int(2000/self.n_levels)
+            self.cooldown_active = True
+            self.cooldown_remaining = 100
+
+            self.term_cond = {
+                "is_success": 0,
+                "obstacle_cond": 0,
+                "dist_progress_cond": 0,
+                "head_progress_cond": 0,
+                "TimeLimit.truncated": 0
+            }
+
+            self.debug=debug
+
+        def _on_step(self) -> bool:
+            # grab info dict from each parallel env
+            infos = self.locals["infos"]
+            dones = self.locals["dones"]    
+            
+            for i, (done, info) in enumerate(zip(dones, infos)):
+                if done:
+                    self.buffer.append(info.get("is_success", False))       # if truncated, there's no is_success => False. If not truncated, then either True or False
+                    if self.cooldown_active: self.cooldown_remaining -= 1
+                    for k in self.term_cond.keys():
+                        self.term_cond[k] += int(info.get(k, False))
+
+            # cooldown episode countdown after curriculum advancement
+            if self.cooldown_active and (self.cooldown_remaining <= 0): 
+                if self.debug: print("\nCooldown finished")
+                self.cooldown_active = False
+                self.cooldown_remaining = 0
+
+            # curriculum advancement logic
+            if len(self.buffer) >= self.success_window:
+
+                success_rate = sum(self.buffer)/len(self.buffer)
+                print(f"Current training success {success_rate:3.2f}", end="\r")
+
+                # curriculum advancement
+                if (not self.explore_boost_active
+                    and not self.cooldown_active
+                    and success_rate >= self.success_threshold):
+                    # print the breakdown of termination conditions before curriculum advancement
+                    self._report_termination_cond()         
+
+                    # only advance agent curriculum until agent curriculum reaches 50% progress
+                    if self.agent_level_idx < (len(self.agent_bound_levels) - 1) // 2:      
+                        self._advance_agent_curriculum()
+                    else:
+                    # alternate between agent and goal randomization afterward
+                        if (self.agent_level_idx + self.goal_level_idx) % 2 != 0 and (self.agent_level_idx < self.n_levels):           
+                            self._advance_agent_curriculum()
+                        elif self.goal_level_idx < self.n_levels:
+                            self._advance_goal_curriculum()
+
+                    if self.agent_level_idx == self.n_levels and self.goal_level_idx == self.n_levels:
+                        self.success_threshold += 0.1
+                    self.buffer.clear()
+                    self._start_cooldown()
+                    self.term_cond = dict.fromkeys(self.term_cond, 0)       # reset all termination condition counts to 0
+
+            # countdown of episodes with boosted exploration
+            if self.explore_boost_steps > 0:
+                self.explore_boost_steps -= 1
+                if self.explore_boost_steps == 0:
+                    self.explore_boost_active = False
+                    vec_noise = self.model.action_noise
+                    for i in vec_noise.noises:
+                        i._sigma = self.noise_std_backup.copy()
+                    
+                    if self.debug: print(f"\nFinished with steps of increased exploration, noise reset to {i._sigma} \n")
+            return True     # to continue training, return True, else return False
+
+        def _start_cooldown(self):
+            '''Function to count down the episodes of no curriculum advancing right after an advancement'''
+            self.cooldown_active = True
+            self.cooldown_remaining = self.cooldown_eps
+            if self.debug: print(f"Starting cooldown for {self.cooldown_eps} episodes\n")
+
+        def _boost_explore(self, num_steps):
+            self.explore_boost_steps = num_steps
+            self.explore_boost_active = True
+            vec_noise = self.model.action_noise             # VectorizedActionNoise, which is a vector of the action noise (NormalActionNoise)
+            noise = vec_noise.noises                        # list of NormalActionNoise instance of one environment
+            self.noise_std_backup = noise[0]._sigma.copy()  # keep a copy of the original noise stdev
+
+            for i in noise:
+                i._sigma = [x+0.05 for x in i._sigma]     # increase action noise stdev for all child envs
+            if self.debug: print(f"Action noise => {i._sigma} for {self.explore_boost_steps} steps")
+
+        def _report_termination_cond(self):
+            success_count  = self.term_cond.get('is_success',            'no is_success')
+            obstacle_count = self.term_cond.get('obstacle_cond',         'no obstacle_cond')
+            stall_d_count  = self.term_cond.get('dist_progress_cond',    'no dist_progress_cond')
+            stall_h_count  = self.term_cond.get('head_progress_cond',    'no head_progress_cond')
+            trunc_count    = self.term_cond.get('TimeLimit.truncated',   'no TimeLimit.truncated')
+            eps_sum = success_count + obstacle_count + stall_d_count + stall_h_count + trunc_count
+
+            print(f"\nA={self.agent_bound_levels[self.agent_level_idx]*100:5.2f}% | G={self.goal_bound_levels[self.goal_level_idx]*100:5.2f}% | "
+                    f"success={success_count} ({success_count/eps_sum*100:5.2f}%) | "
+                    f"obstacle={obstacle_count} ({obstacle_count/eps_sum*100:5.2f}%) | "
+                    f"stall_d={stall_d_count} ({stall_d_count/eps_sum*100:5.2f}%) | "
+                    f"stall_h={stall_h_count} ({stall_h_count/eps_sum*100:5.2f}%) | "
+                    f"trunc={trunc_count} ({trunc_count/eps_sum*100:5.2f}%)")
+
+        def _advance_agent_curriculum(self):
+            ''' Function to advance the agent curriculum by
+            1. inncreasing the agent randomization bound
+            2. boost the action_noise in each environment to encourage exploratory actions'''
+
+            #--- increase the agent bound
+            env = self.model.get_env()  # vecnormalized wrapped vec env
+            vec = env.venv              # unwrap to vec env
+            self.agent_level_idx += 1
+            self.agent_level_idx = min(self.agent_level_idx, len(self.agent_bound_levels) - 1)
+
+            vec.env_method("_set_agent_bound", self.agent_bound_levels[self.agent_level_idx])
+            self.current_agent_bound = vec.get_attr("agent_bound")[0]      # get the actual goal_bound from one environment
+            if self.debug: print(f"Increasing agent bound - level {self.agent_level_idx:2d} | agent_bound = {self.current_agent_bound:4.3f} | success_window = {self.success_window}")
+
+            #--- boost exploration for several steps
+            self._boost_explore(num_steps=500)
+
+        def _advance_goal_curriculum(self):
+            ''' Function to advance the curriculum by
+            1. increasing the goal randomization bound 
+            2. boost action_noise to increase exploration for a set number of steps
+            '''
+            #--- increase the goal bound
+            env = self.model.get_env()  # vecnormalized wrapped vec env
+            vec = env.venv              # unwrap to vec env
+            self.goal_level_idx += 1
+            self.goal_level_idx = min(self.goal_level_idx, len(self.goal_bound_levels) - 1)
+
+            vec.env_method("_set_goal_bound", self.goal_bound_levels[self.goal_level_idx])
+            self.current_goal_bound = vec.get_attr("goal_bound")[0]      # get the actual goal_bound from one environment
+            if self.debug: print(f"Increasing goal bound - level {self.goal_level_idx:2d} | goal_bound = {self.current_goal_bound:4.3f} | success_window = {self.success_window}")
+
+            #--- boost exploration for several steps
+            self._boost_explore(num_steps=500)
+
     def objective_rew_scale(trial):        
         reward_scale = {
             "rew_dist_scale":           trial.suggest_categorical("w_dist", choices=[0.1, 0.25, 0.5, 1.0]),
