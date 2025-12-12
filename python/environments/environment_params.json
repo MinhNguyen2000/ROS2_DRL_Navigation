@@ -21,7 +21,7 @@
         "znear"         : 0.01,
         "zfar"          : 50.0,
         "shadowsize"    : 4096,
-        "framelength"   : 2.0,
+        "framelength"   : 1.0,
         "framewidth"    : 0.05,
         "jointlength"   : 2.0,
         "jointwidth"    : 0.05
@@ -75,7 +75,7 @@
         "contype" : 1,
         "conaffinity" : 1,
         "euler" : [90, 0, 0],
-        "pos" : [0, 0, 0.0614]
+        "pos" : [0, 0, 0.0714]
     },
 
     "agent_footprint_settings" : {
