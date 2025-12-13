@@ -24,6 +24,10 @@ import optuna
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
+# study_name = "model_params_dec13"
+# storage = "sqlite:///python/environments/results/optuna_results.db"
+# optuna.delete_study(study_name = study_name, storage = storage)
+
 # define initialization function:
 def init_model(hyperparameters : dict, 
                reward_scale : dict = {str, float},
@@ -42,7 +46,7 @@ def init_model(hyperparameters : dict,
                                      "reward_scale_options" : reward_scale,
                                      "randomization_options" : randomization_options},
                         vec_env_cls = SubprocVecEnv,
-                        vec_env_kwargs = dict(start_method = "spawn"),
+                        vec_env_kwargs = dict(start_method = "forkserver"),
                         seed = 42)
     
     # wrap environments in a normalization wrapper:
@@ -176,6 +180,12 @@ def train_model(model,
 
     # close the environment:
     env.close()
+
+    # return path to model, normalization stats:
+    model_path = os.path.join(run_dir, f"run_{run}")
+    norm_path = os.path.join(run_dir, "vec_norm_env_stats.pkl")
+
+    return model_path, norm_path
     
 # objective function for optuna:
 def objective_model_params(trial):
@@ -185,30 +195,42 @@ def objective_model_params(trial):
 
     # set the training parameters:
     number_of_runs = 100
-    steps_per_run = 25000
+    steps_per_run = 50_000
+    normalize = True
+
+    # define the randomization options:
+    randomization_options = {"agent_freq" : 1,
+                             "goal_freq" : 1,
+                             "obstacle_freq" : 1}
 
     # define the desired reward scale:
-    reward_scale = {"rew_head_scale" : 10.0,
-                    "rew_head_approach_scale" : 220.0,
-                    "rew_dist_scale" : 3.5,
-                    "rew_dist_approach_scale" : 200.0,
+    reward_scale = {"rew_head_scale" : 1.0,
+                    "rew_head_approach_scale" : 25.0,
+                    "rew_dist_scale" : 0.5,
+                    "rew_dist_approach_scale" : 25.0,
                     "rew_goal_scale" : 5000.0,
                     "rew_obst_scale" : -1000.0, 
-                    "rew_time" : -0.25}
+                    "rew_time" : -0.01}
     
     # suggest values for hyperparameters:
-    gamma = trial.suggest_categorical("gamma", [0.9, 0.95, 0.99, 0.995, 0.999])
-    actor_lr = trial.suggest_categorical("actor_lr", [1e-5, 2.5e-5, 5e-5, 1e-4, 2.5e-4, 5e-4])
-    critic_lr = trial.suggest_categorical("critic_lr", [1e-5, 2.5e-5, 5e-5, 1e-4, 2.5e-4, 5e-4])
-    buffer_size = trial.suggest_int("buffer_size", low = int(1e6), high = int(5e6), step = int(2.5e5))
-    tau = trial.suggest_float("tau", low = 1e-3, high = 1e-2, step = 1e-3)
+    # gamma = trial.suggest_categorical("gamma", [0.9, 0.95, 0.99, 0.995, 0.999])
+    gamma = 0.99
+    actor_lr = trial.suggest_categorical("actor_lr", [1e-5, 2.5e-5, 5e-5, 1e-4, 2.5e-4, 5e-4, 1e-3])
+    critic_lr = trial.suggest_categorical("critic_lr", [1e-5, 2.5e-5, 5e-5, 1e-4, 2.5e-4, 5e-4, 1e-3])
+    buffer_size = trial.suggest_categorical("buffer_size", [int(1e6), int(1.5e6), int(2e6), int(2.5e6)])
+    # tau = trial.suggest_float("tau", low = 1e-3, high = 1e-2, step = 1e-3)
+    tau = 5e-3
     ent_coef = trial.suggest_categorical("ent_coeff", ["auto", "auto_0.1"])
-    train_freq = trial.suggest_int("train_freq", low = 1, high = 8, step = 1)
-    target_update_interval = trial.suggest_int("target_update_interval", low = 1, high = 8, step = 1)
+    train_freq = trial.suggest_int("train_freq", low = 1, high = 4, step = 1)
+    target_update_interval = trial.suggest_int("target_update_interval", low = 1, high = 4, step = 1)
     gradient_steps = trial.suggest_int("gradient_steps", low = 1, high = 4, step = 1)
-    target_entropy = trial.suggest_categorical("target_entropy", ["auto", -2])
+    target_entropy = trial.suggest_categorical("target_entropy", ["auto", "-2"])
     
     # define the hyperparameters:
+    actor_arch = [256, 256]
+    critic_arch = [256, 256]
+    policy_kwargs = {"net_arch" : {"pi" : actor_arch, "qf" : critic_arch}}
+
     hyperparameters = {"policy" : "MlpPolicy",
                        "gamma" : gamma,
                        "actor_lr" : actor_lr,
@@ -225,26 +247,48 @@ def objective_model_params(trial):
                        "action_noise" : None,
                        "verbose" : 0, 
                        "gpu" : True,
+                       "policy_kwargs": policy_kwargs,
                        "tensorboard_log" : tensorboard_log_dir}
     
     # get the model and the environment:
-    _, model = init_model(hyperparameters = hyperparameters, 
-                            reward_scale = reward_scale)
+    env, model = init_model(hyperparameters = hyperparameters, 
+                            reward_scale = reward_scale, 
+                            randomization_options = randomization_options,
+                            normalize = normalize)
     
     # train the model:
-    train_model(model = model, 
-                dir_path = dir_path,
-                reward_scale = reward_scale,
-                hyperparameters = hyperparameters,
-                number_of_runs = number_of_runs,
-                steps_per_run = steps_per_run)
-    
-    # close env:
+    model_path, norm_path = train_model(model = model,
+                                        env = env,
+                                        dir_path = dir_path,
+                                        reward_scale = reward_scale,
+                                        randomization_options = randomization_options,
+                                        hyperparameters = hyperparameters,
+                                        number_of_runs = number_of_runs,
+                                        steps_per_run = steps_per_run)
+
+    # close old env:
     model.env.close()
     
-    # evaluate the policy:
-    n_evals = 25
-    eval_env = gym.make("Nav2D-v0", max_episode_steps = 1_000, render_mode = "rgb_array", is_eval = True)
+    # need to now evaluate the policy:
+    n_evals = 500
+
+    eval_env = make_vec_env("Nav2D-v0", 
+                                n_envs=4,
+                                env_kwargs={"max_episode_steps": 1_000,
+                                            "is_eval": True,
+                                            "randomization_options": randomization_options,
+                                            "reward_scale_options": reward_scale
+                                            },
+                                vec_env_cls = SubprocVecEnv,
+                                vec_env_kwargs = dict(start_method='forkserver'),
+                                seed = 42)
+
+
+    eval_env = VecNormalize.load(norm_path, eval_env)
+    eval_env.training = False
+    eval_env.norm_reward = False
+    model = SAC.Load(model_path, env = eval_env)
+
     mean_eval_rew = eval_policy(env = eval_env, 
                                 num_evals = n_evals, 
                                 model = model)
@@ -261,20 +305,20 @@ def main(do_studies : bool = False,
     tensorboard_log_dir = os.path.join(dir_path, "results", "Nav2D_SAC_SB3_tensorboard")
 
     # set the training parameters:
-    number_of_runs = 200
-    steps_per_run = 50_000
+    number_of_runs = 100
+    steps_per_run = 25_000
 
     # if not using optuna:
     if not do_studies:
         # reward_scale:
         reward_scale = {
-                        "rew_dist_scale" : 0.0,
-                        "rew_dist_approach_scale" : 250*1.5,
-                        "rew_head_scale" : 0.25,
-                        "rew_head_approach_scale" : 0.0,
+                        "rew_dist_scale" : 0.5,
+                        "rew_dist_approach_scale" : 25.0,     # 250 is 1, so 50 is 0.25 
+                        "rew_head_scale" : 1.0,
+                        "rew_head_approach_scale" : 25.0,     # 250 is 1, so 50 is 0.25
                         "rew_goal_scale" : 5000.0,
                         "rew_obst_scale" : -1000.0, 
-                        "rew_time" : -0.1}
+                        "rew_time" : -0.01}
         
         randomization_options = {"agent_freq" : 1,
                         "goal_freq" : 1,
@@ -287,13 +331,13 @@ def main(do_studies : bool = False,
 
         hyperparameters = {"policy" : "MlpPolicy",
                         "gamma" : 0.99,
-                        "actor_lr" : 3e-3,
-                        "critic_lr" : 3e-3,
+                        "actor_lr" : 3e-5,
+                        "critic_lr" : 3e-4,
                         "buffer_size" : int(2e6),
-                        "batch_size" : 2048,
+                        "batch_size" : 1024,
                         "tau" : 5e-3,
-                        "ent_coef" : "auto_0.1",
-                        "train_freq" : 1,
+                        "ent_coef" : "auto",
+                        "train_freq" : 2,
                         "learning_starts" : 50_000,
                         "target_update_interval" : 1,
                         "gradient_steps" : 4,
@@ -311,7 +355,7 @@ def main(do_studies : bool = False,
                                 normalize = normalize)
         
         # train the model:
-        train_model(model = model, 
+        _, _ = train_model(model = model, 
                     env = env,
                     dir_path = dir_path,
                     reward_scale = reward_scale,
@@ -324,7 +368,7 @@ def main(do_studies : bool = False,
     # if using optuna:
     else:
         # set the study parameters:
-        study_name = "model_params_nov13"
+        study_name = "model_params_dec13"
         direction = "maximize"
         storage = "sqlite:///python/environments/results/optuna_results.db"
         load_if_exists = True
@@ -341,5 +385,5 @@ def main(do_studies : bool = False,
         study.optimize(objective_model_params, n_trials = 100)
 
 if __name__=="__main__":
-    main(do_studies = False, 
+    main(do_studies = True, 
          normalize = True)
