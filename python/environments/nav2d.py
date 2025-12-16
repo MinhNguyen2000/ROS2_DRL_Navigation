@@ -450,7 +450,7 @@ class Nav2D(MujocoEnv):
             self.dist_progress_count = 0
 
         # when the abs_diff is more than 15 degress and still growing:
-        if abs_diff >= self.prev_abs_diff and (abs_diff > (15 / 180 * np.pi)):
+        if abs_diff >= self.prev_abs_diff and (abs_diff > np.deg2rad(15)):
             self.head_progress_count += 1
         else:
             self.head_progress_count = 0
@@ -482,12 +482,14 @@ class Nav2D(MujocoEnv):
 
             #---  BASE HEADING REWARD:
             # penalize based on the absolute difference in heading:
-            rew_head = 1.0 - np.tanh(abs_diff / np.pi)
+            if action[0] >= 0.05:
+                rew_head = 1.0 - np.tanh(abs_diff / np.pi)
 
-            # bonus reward for being within +/- 5 degree of the desired trajectory:
-            angle_threshold_rad = np.deg2rad(2.5)
-            if abs_diff <= angle_threshold_rad:
-                rew_head += 1 - 1 / angle_threshold_rad * abs_diff
+                # bonus reward for being within +/- 5 degree of the desired trajectory:
+                angle_threshold_rad = np.deg2rad(2.5)
+                if abs_diff <= angle_threshold_rad:
+                    rew_head += 1 - 1 / angle_threshold_rad * abs_diff
+            else: rew_head = 0
 
             # scale reward:
             self.rew_head_scaled = self.rew_head_scale * rew_head
