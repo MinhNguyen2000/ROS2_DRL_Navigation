@@ -259,7 +259,7 @@ class Nav2D(MujocoEnv):
         # calculate the relative bearing from the agent to the goal
         bearing = np.arctan2(dy,        dx,         dtype = np.float32) % (2 * np.pi)
         heading = np.arctan2(s_theta,   c_theta,    dtype = np.float32) % (2 * np.pi)
-        rel_bearing = (bearing - heading + np.pi) % (2*np.pi) - np.pi
+        rel_bearing = - ((bearing - heading + np.pi) % (2*np.pi) - np.pi)  
         c_bearing = np.cos(rel_bearing, dtype=np.float32)
         s_bearing = np.sin(rel_bearing, dtype=np.float32)
     
