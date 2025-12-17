@@ -104,7 +104,7 @@ class Nav2D(MujocoEnv):
         self.init_qpos = self.data.qpos.ravel().copy()
         self.init_qvel = self.data.qvel.ravel().copy()
         self.agent_init = np.zeros(3)
-        self.agent_pose = np.append(self.data.xpos[self.goal_id][:2], self.data.qpos[2])
+        self.agent_pose = np.append(self.data.xpos[self.agent_id][:2], self.data.qpos[2])
 
         # --- RENDERER INITIALIZATION
         if "render_fps" in self.metadata:
@@ -276,7 +276,7 @@ class Nav2D(MujocoEnv):
         self._obs_buffer[5:7] = c_bearing, s_bearing
         self._obs_buffer[7:]  = self._lidar_buffer
 
-        self.agent_pose = np.append(self.data.xpos[self.goal_id][:2], self.data.qpos[2])
+        self.agent_pose = np.append(self.data.xpos[self.agent_id][:2], self.data.qpos[2])
 
         return self._obs_buffer
 
