@@ -142,6 +142,7 @@ class Nav2D(MujocoEnv):
         self.head_progress_count = 0
         self.progress_threshold = 100 if not is_eval else 500   # number of maximum allowable episodes where the agent has not made any progress toward the goal
         self.obstacle_threshold = 0.05 + self.agent_radius
+        self.collision = False
 
         # --- RANDOMIZATION INITIALIZATION
         self.episode_counter = 0
@@ -319,7 +320,7 @@ class Nav2D(MujocoEnv):
             pass
 
         if self.is_eval and self.render_mode=="human":
-            qpos[:3] = self.agent_pose
+            qpos[:3] = self.agent_pose if (not self.collision) else self.init_qpos[:3]
             qvel[:3] = np.zeros(3)
 
         self.set_state(qpos, qvel)
@@ -472,6 +473,8 @@ class Nav2D(MujocoEnv):
             info["obstacle_cond"]       = bool(obstacle_cond)
             info["dist_progress_cond"]  = (self.dist_progress_count >= self.progress_threshold)
             info["head_progress_cond"]  = (self.head_progress_count >= self.progress_threshold)
+
+            self.collision = bool(obstacle_cond)
             
         # 4. reward:
         if distance_cond:
