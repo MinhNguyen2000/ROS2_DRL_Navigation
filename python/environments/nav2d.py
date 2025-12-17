@@ -88,6 +88,8 @@ class Nav2D(MujocoEnv):
         self.model.vis.global_.offwidth = width
         self.model.vis.global_.offheight = height
         self.data = mj.MjData(self.model)
+        self.agent_id = self.model.body("agent").id
+        self.goal_id = self.model.body("goal").id
 
         # --- OBSERVATION SPACE INITIALIZATION
         self._set_observation_space()
@@ -100,8 +102,9 @@ class Nav2D(MujocoEnv):
         self._set_action_space()
 
         self.init_qpos = self.data.qpos.ravel().copy()
-        self.agent_init = np.zeros(3)
         self.init_qvel = self.data.qvel.ravel().copy()
+        self.agent_init = np.zeros(3)
+        self.agent_pose = np.append(self.data.xpos[self.goal_id][:2], self.data.qpos[2])
 
         # --- RENDERER INITIALIZATION
         if "render_fps" in self.metadata:
@@ -132,9 +135,6 @@ class Nav2D(MujocoEnv):
 
         self.window = None
         self.clock = None
-        
-        self.agent_id = self.model.body("agent").id
-        self.goal_id = self.model.body("goal").id
 
         # --- TERMINATION CONDITION INITILIZATION
         self.distance_threshold = self.agent_radius
@@ -276,6 +276,8 @@ class Nav2D(MujocoEnv):
         self._obs_buffer[5:7] = c_bearing, s_bearing
         self._obs_buffer[7:]  = self._lidar_buffer
 
+        self.agent_pose = np.append(self.data.xpos[self.goal_id][:2], self.data.qpos[2])
+
         return self._obs_buffer
 
     def reset_model(self, 
@@ -315,6 +317,10 @@ class Nav2D(MujocoEnv):
 
         if obstacle_randomize:
             pass
+
+        if self.is_eval and self.render_mode=="human":
+            qpos[:3] = self.agent_pose
+            qvel[:3] = np.zeros(3)
 
         self.set_state(qpos, qvel)
         ob = self._get_obs()
