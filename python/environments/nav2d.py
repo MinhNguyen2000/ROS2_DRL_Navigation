@@ -17,7 +17,7 @@ class Nav2D(MujocoEnv):
     def __init__(self, 
                  json_file: str = "environment_params.json",
                  frame_skip: int = 2,
-                 default_camera_config: dict[str, float | int] | None = None,
+                 default_camera_config: dict[str, float | int] = {"azimuth" : 90.0, "elevation" : -90.0, "distance" : 3.0, "lookat" : [0.0, 0.0, 0.0]},
                  render_mode: str = "rgb_array",
                  width: int = 480,
                  height: int = 480,
@@ -79,6 +79,8 @@ class Nav2D(MujocoEnv):
         
         # --- load simulation params and initialize the simulation
         env =  MakeEnv(params)
+        env.light_pos = np.array([0, 0, 1]) * 5 * self.size
+        default_camera_config["distance"] = 3 * self.size
         env.make_env(agent_pos = self._agent_loc, 
                      task_pos = self._task_loc, 
                      n_rays = self.n_rays)
