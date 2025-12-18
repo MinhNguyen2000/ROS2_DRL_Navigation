@@ -52,13 +52,13 @@ def main():
         "tensorboard_dir":  "Nav2D_TD3_SB3_tensorboard"}
 
     default_reward_scale = {
-        "rew_dist_scale":           0.5,
+        "rew_dist_scale":           2.0,
         "rew_dist_approach_scale":  25.0,
         "rew_head_scale":           1.0,
         "rew_head_approach_scale":  25.0,
-        "rew_time":                 -0.01,
-        "rew_goal_scale":           5_000.0,
-        "rew_obst_scale":           -1_000.0}
+        "rew_time":                 -0.1,
+        "rew_goal_scale":           10_000.0,
+        "rew_obst_scale":           -2_000.0}
 
     default_randomization_options = {"agent_freq": 1, "goal_freq": 1}
 
@@ -77,7 +77,7 @@ def main():
         env = make_vec_env("Nav2D-v0", 
                             n_envs=n_proc, 
                             seed=73,
-                            env_kwargs={"max_episode_steps": 1_500,
+                            env_kwargs={"max_episode_steps": 2_500,
                                         "reward_scale_options": reward_scale,
                                         "randomization_options": randomization_options
                                         },
@@ -87,18 +87,18 @@ def main():
         n_actions = env.get_attr("action_space")[0].shape[0]        # obtain the size of the action_space from the list of action_space among the n_proc subprocess envs
 
         # Hyperparameters
-        learning_rate   = float(hyperparam_dict.get("lr", 1e-3))
-        buffer_size     = int(hyperparam_dict.get("buffer_size",2e6))
-        learning_starts = int(hyperparam_dict.get("learn_start", 1e5))
-        batch_size      = int(hyperparam_dict.get("batch_size",256))
-        tau             = float(hyperparam_dict.get("tau", 3e-3))
-        gamma           = float(hyperparam_dict.get("gamma", 0.99))
-        train_freq      = int(hyperparam_dict.get("train_freq", 2))
-        gradient_steps  = int(hyperparam_dict.get("grad_step", 4))
-        act_noise_std   = int(hyperparam_dict.get("act_noise_std", 0.05))
-        action_noise    = NormalActionNoise(mean=np.zeros(n_actions), sigma=act_noise_std*np.ones(n_actions))     
-        n_steps         = int(hyperparam_dict.get("n_steps", 1))
-        policy_delay    = int(hyperparam_dict.get("policy_delay", 4))
+        learning_rate       = float(hyperparam_dict.get("lr", 1e-3))
+        buffer_size         = int(hyperparam_dict.get("buffer_size",2e6))
+        learning_starts     = int(hyperparam_dict.get("learn_start", 1e5))
+        batch_size          = int(hyperparam_dict.get("batch_size",256))
+        tau                 = float(hyperparam_dict.get("tau", 3e-3))
+        gamma               = float(hyperparam_dict.get("gamma", 0.99))
+        train_freq          = int(hyperparam_dict.get("train_freq", 2))
+        gradient_steps      = int(hyperparam_dict.get("grad_step", 4))
+        act_noise_std       = float(hyperparam_dict.get("act_noise_std", 0.05))
+        action_noise        = NormalActionNoise(mean=np.zeros(n_actions), sigma=act_noise_std*np.ones(n_actions))     
+        n_steps             = int(hyperparam_dict.get("n_steps", 1))
+        policy_delay        = int(hyperparam_dict.get("policy_delay", 4))
         target_policy_noise = float(hyperparam_dict.get("tpolicy_noise", 0.05))
         target_noise_clip   = float(hyperparam_dict.get("tpolicy_clip", 0.25))
         model_dir           = hyperparam_dict.get("model_dir", "Nav2D_TD3_SB3_results")
@@ -161,7 +161,7 @@ def main():
 
         hyperparam_codified = f"{learning_rate}_{buffer_size}_{learning_starts}_{batch_size}_{tau}_{gamma}_"
         hyperparam_codified += f"{train_freq}_{gradient_steps}_{act_noise_std}_{n_steps}_{policy_delay}_{target_policy_noise}_{target_noise_clip}_"
-        hyperparam_codified += f"{reward_scale['rew_head_scale']}_{reward_scale['rew_head_approach_scale']}_{reward_scale['rew_dist_scale']}_{reward_scale['rew_dist_approach_scale']}_{reward_scale['rew_goal_scale']}_{reward_scale['rew_obst_scale']}_"
+        hyperparam_codified += f"{reward_scale['rew_dist_scale']}_{reward_scale['rew_dist_approach_scale']}_{reward_scale['rew_head_scale']}_{reward_scale['rew_head_approach_scale']}_{reward_scale['rew_time']}_{reward_scale['rew_goal_scale']}_{reward_scale['rew_obst_scale']}_"
         hyperparam_codified += f"{randomization_options['agent_freq']}_{randomization_options['goal_freq']}"
 
         timestamp = datetime.now().strftime("%y%m%d_%H%M")
@@ -464,17 +464,16 @@ def main():
         study.optimize(objective_rew_scale, n_trials=50)
 
     # # RUN OPTUNA STUDY
-    rew_scale_optuna()
+    # rew_scale_optuna()
     
-
     # # RUN ONE TRAINING
-    # for i in range(1):
-    #     train(num_runs=100,
-    #           steps_per_run=50_000, 
-    #           models_to_save=25,
-    #           hyperparam_dict=default_hyperparam_dict,
-    #           reward_scale=default_reward_scale,
-    #           randomization_options=default_randomization_options)
+    for i in range(1):
+        train(num_runs=500,
+              steps_per_run=20_000, 
+              models_to_save=20,
+              hyperparam_dict=default_hyperparam_dict,
+              reward_scale=default_reward_scale,
+              randomization_options=default_randomization_options)
 
 if __name__=="__main__":
     main()
