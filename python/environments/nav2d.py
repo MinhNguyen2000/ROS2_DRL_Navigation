@@ -379,7 +379,7 @@ class Nav2D(MujocoEnv):
         
         else: # if an evaluation env, always reset and with the largest bound possible
             self.agent_bound = self.agent_bound_final
-            self.goal_bound = 0.3 * self.goal_bound_final
+            self.goal_bound = self.goal_bound_final
             ob = self.reset_model(agent_randomize = True,
                                   goal_randomize = True,
                                   obstacle_randomize = True)
