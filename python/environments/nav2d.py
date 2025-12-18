@@ -320,7 +320,8 @@ class Nav2D(MujocoEnv):
             pass
 
         if self.is_eval and self.render_mode=="human":
-            qpos[:3] = self.agent_pose if (not self.collision) else self.init_qpos[:3]
+            qpos[:2] = self.agent_pose[:2] - self._agent_loc if (not self.collision) else self.init_qpos[:2]
+            qpos[2] = self.agent_pose[2] if (not self.collision) else self.init_qpos[2]
             qvel[:3] = np.zeros(3)
 
         self.set_state(qpos, qvel)
