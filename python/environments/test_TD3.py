@@ -20,25 +20,26 @@ from collections import deque
 
 result_dir = os.path.join(os.getcwd(),"python","environments")
 result_nums = [f"result_000{i}"for i in range(73, 75)]
-result_nums = ["result_00015"]
+result_nums = ["result_00115"]
 run_num = 500
+goal_bound_ratio = 1.0
 
 def eval():
+    print(f"Evaluating {result_nums}, run {run_num:3d}")
     for result_num in result_nums:
         result_path = os.path.join(result_dir, "results", "Nav2D_TD3_SB3_results", result_num)
         run_path = os.path.join(result_path, f"run_{run_num}")
         
         # testing parameters
         n_test = 50
-        report_freq = 50
+        report_freq = 100
         success_window = deque(maxlen=report_freq)
         normalized = True
 
         # environment options
-        width = 400
-        height = 400
-        default_camera_config = {"azimuth" : 90.0, "elevation" : -90.0, "distance" : 3, "lookat" : [0.0, 0.0, 0.0]}
-        render_mode = "human" if n_test<=20 else "rgb_array"
+        width = 800
+        height = 800
+        render_mode = "human" if n_test<=50 else "rgb_array"
         camera_id = 2
 
         DEFAULT_CAMERA = "overhead_camera"
@@ -46,46 +47,57 @@ def eval():
         RENDER_EVERY_FRAME = True              # similar sim speed as MuJoCo rendering when set to False, else slower
 
         reward_scale= {
-                    "rew_head_scale": 2.0,
-                    "rew_head_approach_scale": 50.0,
-                    "rew_dist_scale": 2.0,
-                    "rew_dist_approach_scale": 50.0,
-                    "rew_time": -0.1,
-                    "rew_goal_scale": 5_000.0,
-                    "rew_obst_scale": -10_000.0
-                }
-
+            "rew_dist_scale":           2.0,
+            "rew_dist_approach_scale":  25.0,
+            "rew_head_scale":           1.0,
+            "rew_head_approach_scale":  25.0,
+            "rew_time":                 -0.1,
+            "rew_goal_scale":           10_000.0,
+            "rew_obst_scale":           -2_000.0
+        }
+        
         randomization_options = {
-                    "agent_freq": 1,
-                    "goal_freq": 1
-                }
+            "agent_freq": 1,
+            "goal_freq": 1,
+            "obstacle_freq": 1
+        }
+        term_cond = {
+            "is_success": 0,
+            "obstacle_cond": 0,
+            "dist_progress_cond": 0,
+            "head_progress_cond": 0,
+            "TimeLimit.truncated": 0
+        }
             
         core_env = gym.make("Nav2D-v0", render_mode=render_mode, 
                             width=width,height=height,
                             default_camera_config=default_camera_config,
                             camera_id=camera_id,
-                            max_episode_steps=1_000,
+                            max_episode_steps=2_500,
                             is_eval=True,
                             reward_scale_options=reward_scale,
-                            visual_options = {2: True}
+                            randomization_options=randomization_options,
+                            visual_options = {2: True, 8: True}
                             )
         if normalized:
-            test_env = DummyVecEnv([lambda: core_env])
-            # test_env = make_vec_env("Nav2D-v0", 
-            #                         n_envs=10, 
-            #                         seed=73,
-            #                         env_kwargs={"max_episode_steps": 1_000,
-            #                                     "reward_scale_options": reward_scale,
-            #                                     "randomization_options": randomization_options
-            #                                     },
-            #                         vec_env_cls=SubprocVecEnv,
-            #                         vec_env_kwargs=dict(start_method='forkserver'))
+            if render_mode == "human":
+                test_env = DummyVecEnv([lambda: core_env])
+            else:
+                test_env = make_vec_env("Nav2D-v0", 
+                                        n_envs=20,
+                                        env_kwargs={"max_episode_steps": 2_500,
+                                                    "is_eval": True,
+                                                    "reward_scale_options": reward_scale,
+                                                    "randomization_options": randomization_options
+                                                    },
+                                        vec_env_cls=SubprocVecEnv,
+                                        vec_env_kwargs=dict(start_method='forkserver'))
             test_env = VecNormalize.load(os.path.join(result_path, f"norm_stats_{run_num}.pkl"), test_env)
             test_env.training = False
             test_env.norm_reward = False
-            test_env.venv.env_method("_set_goal_bound", 0.0)
-            
-            print(f"created a normalized environment with the goal bound set to {test_env.venv.get_attr('goal_bound')[0]}")
+
+            test_env.venv.env_method("_set_goal_bound", goal_bound_ratio)
+            print(f"created a normalized environment with the goal bound set to {test_env.venv.get_attr('goal_bound')[0]} ({goal_bound_ratio*100:5.2f}%)")
             model_load = TD3.load(run_path, env=test_env)
         else:
             print("created a core environment (unnormalized)")
@@ -101,24 +113,20 @@ def eval():
                 action, _ = model_load.predict(obss, deterministic=True)
                 nobss, rews, dones, infos = test_env.step(action)
 
-                for i in range(n_envs):
-                    if dones[i]:
+                # Check for terminal episodes among all the vec_envs
+                for i, (done, info) in enumerate(zip(dones, infos)):
+                    if done:
                         eps_evaluated += 1
-
-                        info = infos[i]
+                        for k in term_cond.keys(): term_cond[k] += int(info.get(k,False))
                         success_window.append(info.get("is_success", False))
                         
-                        # reset the current env
-                        result = test_env.env_method("reset", indices=i)[0]
-                        if isinstance(result,tuple):        # if reset() return obs and info
-                            nobss[i], _ = result    
-                        else:                               # if reset() only return obs
-                            nobss[i] = result
                 obss = nobss
 
                 if len(success_window) >= report_freq:
                     print(f"Success rate from run {eps_evaluated-report_freq+1} to {eps_evaluated} is {sum(success_window)/len(success_window)*100:.2f}%             ")
+                    print(f"Termination conditions: {term_cond}")
                     success_window.clear()
+                    term_cond = dict.fromkeys(term_cond, 0)
                         
         else:           # using core gymnasium environment
             for eps_evaluated in tqdm(range(1,n_test+1), ncols = 100, colour = "#33FF00", desc = f"Evaluating {result_num}..."):
