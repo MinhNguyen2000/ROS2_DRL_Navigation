@@ -355,10 +355,6 @@ class Nav2D(MujocoEnv):
         # reset model data:
         mj.mj_resetData(self.model, self.data)
         
-        # Log the information from this run before reset
-        info = {"agent_init": self.agent_init,
-                "rew_head": self.rew_head_scaled, 
-                "rew_head_approach": self.rew_head_approach_scaled}
 
         # --- CHECK RANDOMIZATION CONDITIONS
         
@@ -392,7 +388,7 @@ class Nav2D(MujocoEnv):
         # render if mode == "human":
         if self.render_mode == "human":
             self.render()
-        return ob, info
+        return ob, {}
 
     def step(self, action):
         ''' method to execute one simulation step given the velocity command to the agent
