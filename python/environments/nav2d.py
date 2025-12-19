@@ -25,6 +25,7 @@ class Nav2D(MujocoEnv):
                  camera_name: str | None = None,
                  reward_scale_options: dict[str, float] | None = None,
                  randomization_options: dict[str, float] | None = None,
+                 obstacle_options: dict[str, int] = {"n_obstacles": 0},
                  visual_options: dict[int, bool] | None = None,
                  is_eval: bool = False
                 ):
@@ -58,6 +59,7 @@ class Nav2D(MujocoEnv):
         self.n_rays = 360
         self.n_ray_groups = 8
         self._ray_per_group = int(self.n_rays/self.n_ray_groups)
+        self.n_obstacles = obstacle_options.get("n_obstacles", 0)
 
         self.linear_scale = 2
         self.angular_scale = 3
@@ -72,10 +74,64 @@ class Nav2D(MujocoEnv):
 
         scaled_inner_length = 2 * (self.size - self.agent_radius)
         self.dmax = np.sqrt(2 * scaled_inner_length ** 2, dtype = np.float32)
+
+        # --- TERMINATION CONDITION INITILIZATION
+        self.distance_threshold = self.agent_radius
+        self.dist_progress_count = 0
+        self.head_progress_count = 0
+        self.progress_threshold = 100 if not is_eval else 500   # number of maximum allowable episodes where the agent has not made any progress toward the goal
+        self.obstacle_threshold = 0.05 + self.agent_radius
+        self.collision = False
+
+        # --- RANDOMIZATION INITIALIZATION
+        self.episode_counter = 0
+        self.agent_frequency    = randomization_options.get("agent_freq", 1)    if randomization_options else 1
+        self.goal_frequency     = randomization_options.get("goal_freq", 1)    if randomization_options else 1
+        self.obstacle_frequency = randomization_options.get("obstacle_freq", 1) if randomization_options else 1
+
+        self.agent_randomize = False
+        self.goal_randomize = False
+        self.obstacle_randomize = False
+
+        # agent randomization bounds
+        self.agent_bound_init  = 2 * self.agent_radius
+        self.agent_bound_final = self.size - self.obstacle_threshold
+        self.agent_bound = self.agent_bound_final
+        self.angle_bound = np.pi
+
+        # obstacle randomization bounds
+        self.obstacle_size_high = params["obstacle_settings"]["size_high"]
+        self.obstacle_bound = self.size - self.obstacle_size_high
+
+        # goal randomization bounds
+        self.goal_bound_init = 0
+        self.goal_bound_final = self.size - 2 * self.agent_radius
+        self.goal_bound = self.goal_bound_final
+
+        # --- REWARD SCALE INITIALIZATION
+        self.rew_dist_scale             = reward_scale_options.get("rew_dist_scale", 1)             if reward_scale_options else 1
+        self.rew_dist_approach_scale    = reward_scale_options.get("rew_dist_approach_scale", 250)  if reward_scale_options else 100
+        self.rew_head_scale             = reward_scale_options.get("rew_head_scale", 1)             if reward_scale_options else 1
+        self.rew_head_approach_scale    = reward_scale_options.get("rew_head_approach_scale", 250)  if reward_scale_options else 100
+        self.rew_goal_scale             = reward_scale_options.get("rew_goal_scale", 5000)          if reward_scale_options else 5000
+        self.rew_obst_scale             = reward_scale_options.get("rew_obst_scale", -1000)         if reward_scale_options else -1000
+        self.rew_time                   = reward_scale_options.get("rew_time", -0.25)               if reward_scale_options else -0.25
+
+        # intialize the scaled reward components
+        self.rew_head_scaled = 0
+        self.rew_head_approach_scaled = 0
+        self.rew_dist_scaled = 0
+        self.rew_dist_approach_scaled = 0
+
+        # --- whether an evaluation environment or not
+        self.is_eval = is_eval
         
         # --- define the uninitialized location of the agent and the target
         self._agent_loc = [-(self.size - 2*self.agent_radius), -(self.size - 2*self.agent_radius)]
         self._task_loc = [(self.size - 2*self.agent_radius), (self.size - 2*self.agent_radius)]
+        # self._agent_loc = [0, 0]
+        # self._task_loc = [0, 0]
+        self._obstacle_loc = np.random.uniform(-self.obstacle_bound, self.obstacle_bound, size=(self.n_obstacles,2))
         
         # --- load simulation params and initialize the simulation
         env =  MakeEnv(params)
@@ -83,7 +139,9 @@ class Nav2D(MujocoEnv):
         default_camera_config["distance"] = 3 * self.size
         env.make_env(agent_pos = self._agent_loc, 
                      task_pos = self._task_loc, 
-                     n_rays = self.n_rays)
+                     n_rays = self.n_rays,
+                     n_obstacles=self.n_obstacles,
+                     obs_pos=self._obstacle_loc)
         self.model = env.model
         self.model.vis.global_.offwidth = width
         self.model.vis.global_.offheight = height
@@ -135,53 +193,6 @@ class Nav2D(MujocoEnv):
 
         self.window = None
         self.clock = None
-
-        # --- TERMINATION CONDITION INITILIZATION
-        self.distance_threshold = self.agent_radius
-        self.dist_progress_count = 0
-        self.head_progress_count = 0
-        self.progress_threshold = 100 if not is_eval else 500   # number of maximum allowable episodes where the agent has not made any progress toward the goal
-        self.obstacle_threshold = 0.05 + self.agent_radius
-        self.collision = False
-
-        # --- RANDOMIZATION INITIALIZATION
-        self.episode_counter = 0
-        self.agent_frequency    = randomization_options.get("agent_freq", 1)    if randomization_options else 1
-        self.goal_frequency     = randomization_options.get("goal_freq", 1)    if randomization_options else 1
-        self.obstacle_frequency = randomization_options.get("obstacle_freq", 1) if randomization_options else 1
-
-        self.agent_randomize = False
-        self.goal_randomize = False
-        self.obstacle_randomize = False
-
-        # agent randomization bounds
-        self.agent_bound_init  = 2 * self.agent_radius
-        self.agent_bound_final = self.size - self.obstacle_threshold
-        self.agent_bound = self.agent_bound_final
-        self.angle_bound = np.pi
-
-        # goal randomization bounds
-        self.goal_bound_init = 0
-        self.goal_bound_final = self.size - 2 * self.agent_radius
-        self.goal_bound = self.goal_bound_final
-
-        # --- REWARD SCALE INITIALIZATION
-        self.rew_dist_scale             = reward_scale_options.get("rew_dist_scale", 1)             if reward_scale_options else 1
-        self.rew_dist_approach_scale    = reward_scale_options.get("rew_dist_approach_scale", 250)  if reward_scale_options else 100
-        self.rew_head_scale             = reward_scale_options.get("rew_head_scale", 1)             if reward_scale_options else 1
-        self.rew_head_approach_scale    = reward_scale_options.get("rew_head_approach_scale", 250)  if reward_scale_options else 100
-        self.rew_goal_scale             = reward_scale_options.get("rew_goal_scale", 5000)          if reward_scale_options else 5000
-        self.rew_obst_scale             = reward_scale_options.get("rew_obst_scale", -1000)         if reward_scale_options else -1000
-        self.rew_time                   = reward_scale_options.get("rew_time", -0.25)               if reward_scale_options else -0.25
-
-        # intialize the scaled reward components
-        self.rew_head_scaled = 0
-        self.rew_head_approach_scaled = 0
-        self.rew_dist_scaled = 0
-        self.rew_dist_approach_scaled = 0
-
-        # --- whether an evaluation environment or not
-        self.is_eval = is_eval
 
     def _set_observation_space(self):
         ''' 
@@ -317,8 +328,9 @@ class Nav2D(MujocoEnv):
             self.init_qvel[0:2] = qvel[0:2]
 
         if obstacle_randomize:
-            pass
-
+            for i in range(self.n_obstacles):
+                qpos[5+2*i:7+2*i] = self.np_random.uniform(-self.obstacle_bound, self.obstacle_bound, size=2) - self._obstacle_loc[i]
+        
         if self.is_eval and self.render_mode=="human":
             qpos[:2] = self.agent_pose[:2] - self._agent_loc if (not self.collision) else self.init_qpos[:2]
             qpos[2] = self.agent_pose[2] if (not self.collision) else self.init_qpos[2]
@@ -360,15 +372,15 @@ class Nav2D(MujocoEnv):
         
         if not self.is_eval:
             # agent randomization
-            if self.episode_counter == 1 or self.episode_counter % self.agent_frequency == 0:
+            if self.episode_counter % self.agent_frequency == 0:
                 self.agent_randomize = True
 
             # goal randomization, with goal bound increase handled externally
             if self.episode_counter % self.goal_frequency == 0:
                 self.goal_randomize = True
 
-            # if self.episode_counter % self.obstacle_frequency == 0:
-            #     self.obstacle_randomize = True
+            if self.episode_counter % self.obstacle_frequency == 0:
+                self.obstacle_randomize = True
 
             # reset mujoco model:
             ob = self.reset_model(self.agent_randomize, self.goal_randomize, self.obstacle_randomize)
