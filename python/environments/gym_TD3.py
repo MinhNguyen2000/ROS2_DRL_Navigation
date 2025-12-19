@@ -60,8 +60,33 @@ def main():
         "rew_goal_scale":           10_000.0,
         "rew_obst_scale":           -2_000.0}
 
-    default_randomization_options = {"agent_freq": 1, "goal_freq": 1}
+    default_randomization_options = {"agent_freq": 1, "goal_freq": 1, "obstacle_freq":1}
 
+    default_obstacle_options = {"n_obstacles": 0}
+
+    def make_env(n_proc: int = 12,
+                 seed: int = 73,
+                 max_episode_steps: int = 2_500,
+                 reward_scale: dict = default_reward_scale,
+                 randomization_options: dict = default_randomization_options,
+                 obstacle_options: dict = default_obstacle_options):
+        
+        print("Making subprocess vectorized environments!")
+        env = make_vec_env("Nav2D-v0", 
+                            n_envs=n_proc, 
+                            seed=seed,
+                            env_kwargs={"max_episode_steps": max_episode_steps,
+                                        "reward_scale_options": reward_scale,
+                                        "randomization_options": randomization_options,
+                                        "obstacle_options": obstacle_options
+                                        },
+                            vec_env_cls=SubprocVecEnv, 
+                            vec_env_kwargs=dict(start_method='forkserver'))
+
+        env = VecNormalize(env, training=True, norm_obs=True, norm_reward=True)
+
+        return env
+    
     def train(num_runs: int = 500,
               steps_per_run: int = 20_000,
               models_to_save: int = 25,
@@ -70,19 +95,7 @@ def main():
               randomization_options: dict = default_randomization_options
               ):
 
-        # Environment vectorization
-        n_proc = 24
-
-        print("Making subprocess vectorized environments!")
-        env = make_vec_env("Nav2D-v0", 
-                            n_envs=n_proc, 
-                            seed=73,
-                            env_kwargs={"max_episode_steps": 2_500,
-                                        "reward_scale_options": reward_scale,
-                                        "randomization_options": randomization_options
-                                        },
-                            vec_env_cls=SubprocVecEnv, 
-                            vec_env_kwargs=dict(start_method='forkserver'))
+        env = make_env()
     
         n_actions = env.get_attr("action_space")[0].shape[0]        # obtain the size of the action_space from the list of action_space among the n_proc subprocess envs
 
@@ -114,7 +127,6 @@ def main():
         use_custom_policy = False
         cuda_enabled = True
         
-        env = VecNormalize(env, training=True, norm_obs=True, norm_reward=True, gamma=gamma)
         env.reset()
         
         # Create the model
@@ -149,8 +161,6 @@ def main():
         result_number = f"result_{len(os.listdir(base_path))-1:05d}"
         results_path = os.path.join(base_path, result_number)
 
-        curriculum_callback = CurriculumCallback(success_window=50, threshold=0.75)
-
         # Save the result-params mapping into a json file
         trial_to_param_path = os.path.join(base_path,'trial_to_param.json')
         if os.path.exists(trial_to_param_path):
@@ -172,13 +182,17 @@ def main():
         with open(trial_to_param_path, "w") as f:
             json.dump(data, f, indent=2)
 
-        # training
+        # DEFINE TRAINING CALLBACK FUNCTIONS
+        curriculum_callback = CurriculumCallback(success_window=50, threshold=0.75)
+        advanced_env_callback = AdvanceEnvCallback(success_window=50, success_threshold=0.9)
+
+        # TRAINING
         for run in tqdm(range(1,number_of_runs+1), ncols = 100, colour = "#33FF00", desc = f"{result_number} training progress"):
             # learn every run:
             model.learn(total_timesteps = steps_per_run, 
                         tb_log_name=f"{result_number}",
                         reset_num_timesteps = False,
-                        # callback=curriculum_callback
+                        callback=advanced_env_callback
                         )
 
             # save a model and the normalization stats once in a while
@@ -296,7 +310,7 @@ def main():
                     if self.cooldown_active: self.cooldown_remaining -= 1
                     for k in self.term_cond.keys():
                         self.term_cond[k] += int(info.get(k, False))
-
+  
             # cooldown episode countdown after curriculum advancement
             if self.cooldown_active and (self.cooldown_remaining <= 0): 
                 if self.debug: print("\nCooldown finished")
@@ -411,6 +425,102 @@ def main():
 
             #--- boost exploration for several steps
             self._boost_explore(num_steps=500)
+
+    class AdvanceEnvCallback(BaseCallback):
+        """
+        This callback advances training to more complicated environment with increasing number of obstacles
+        """
+        def __init__(self, success_window=50, success_threshold=0.9):
+            super().__init__()
+            self.success_window = success_window
+            self.success_threshold = success_threshold
+            self.success_buffer = deque(maxlen=success_window)
+
+            self.env_level = 0
+            self.max_level = 4
+            self.obstacle_per_level = 5
+            self.threshold_drop_per_level = 0.05
+            self.n_obstacles = self.obstacle_per_level * self.env_level
+
+            self.term_cond = {
+                "is_success":           0,
+                "obstacle_cond":        0,
+                "dist_progress_cond":   0,
+                "head_progress_cond":   0,
+                "TimeLimit.truncated":  0
+            }
+
+            self.env_advance = False            # flag to decide whether to advance the environment at the end of a model.learn()
+
+        def _on_step(self):
+            """
+            Method that is triggered every training step to check
+            1. 
+            """
+            # grab the dones and infos lists from the parallel envs
+            dones = self.locals["dones"]
+            infos = self.locals["infos"]
+
+            # check all dones and infos for a terminal episode
+            for i, (done, info) in enumerate(zip(dones, infos)):
+                if done:
+                    self.success_buffer.append(info.get("is_success", False))
+                    for k in self.term_cond.keys(): self.term_cond[k] += int(info.get(k, False))
+            
+            # when collect enough terminated episodes, check the success rate
+            if len(self.success_buffer) >= self.success_window:
+                success_rate = sum(self.success_buffer) / len(self.success_buffer)
+                
+                # if training success_rate > threshold and not at max environment level, increase environment level
+                if success_rate >= self.success_threshold and self.env_level < self.max_level:
+                    self._report_termination_cond()
+                    self.env_level = min(self.env_level + 1, self.max_level)
+                    self.env_advance = True
+                    self.success_buffer.clear()
+            return True
+        
+        def _on_training_end(self):
+            """This event is triggered before exiting the learn() method"""
+            if not self.env_advance:
+                return
+            
+            # DESTROY OLD ENVIRONMENT (to release the subprocesses)
+            old_env = self.model.get_env()
+            if old_env is not None:
+                old_env.close()
+
+            # CREATE AND SET NEW ENVIRONMENT
+            self.n_obstacles = self.obstacle_per_level * self.env_level
+            env = make_env(obstacle_options={'n_obstacles': self.n_obstacles})
+            env.reset()
+            self.model.set_env(env)
+            model_env = self.model.get_env()
+
+            # reduce the success threshold per level
+            self.success_threshold -= self.threshold_drop_per_level
+
+            # debug print to verify the number of obstacles in the new environment
+            print(f"Switched to a new environment level {self.env_level:3d} | "
+                  f"Number of obstacles {model_env.get_attr('n_obstacles')[0]:3d} | "
+                  f"Success threshold {self.success_threshold: 5.3f}")
+            
+            # Reset the environment advance flag
+            self.env_advance = False
+        
+        def _report_termination_cond(self):
+            success_count  = self.term_cond.get('is_success',            'no is_success')
+            obstacle_count = self.term_cond.get('obstacle_cond',         'no obstacle_cond')
+            stall_d_count  = self.term_cond.get('dist_progress_cond',    'no dist_progress_cond')
+            stall_h_count  = self.term_cond.get('head_progress_cond',    'no head_progress_cond')
+            trunc_count    = self.term_cond.get('TimeLimit.truncated',   'no TimeLimit.truncated')
+            eps_sum = success_count + obstacle_count + stall_d_count + stall_h_count + trunc_count
+
+            print(f"\nTraining result reported from environment level {self.env_level} with "
+                    f"success={success_count} ({success_count/eps_sum*100:5.2f}%) | "
+                    f"obstacle={obstacle_count} ({obstacle_count/eps_sum*100:5.2f}%) | "
+                    f"stall_d={stall_d_count} ({stall_d_count/eps_sum*100:5.2f}%) | "
+                    f"stall_h={stall_h_count} ({stall_h_count/eps_sum*100:5.2f}%) | "
+                    f"trunc={trunc_count} ({trunc_count/eps_sum*100:5.2f}%)")
 
     def objective_rew_scale(trial):        
         reward_scale = {
