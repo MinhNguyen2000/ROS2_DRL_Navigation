@@ -125,6 +125,12 @@ class MakeEnv:
         # self.agent_conaffinity = params["agent_settings"]["conaffinity"]
         # self.agent_rgba = params["agent_settings"]["rgba"]
 
+        # obstacle settings:
+        self.obstacle_size_low = params["obstacle_settings"]["size_low"]
+        self.obstacle_size_high = params["obstacle_settings"]["size_high"]
+        self.obstacle_height = params["obstacle_settings"]["height"]
+        self.obstacle_bound = self.ground_internal_length - self.obstacle_size_high
+
         # task settings:
         self.task_radius = params["task_settings"]["radius"]
         self.task_height = params["task_settings"]["height"]
@@ -296,46 +302,42 @@ class MakeEnv:
         
         """
         task = self.spec.worldbody.add_body(name = "goal", pos = task_pos)
-        task.add_geom(name = "goal", type = mj.mjtGeom.mjGEOM_CYLINDER, size = [self.task_radius, self.task_height, 0], contype = 0, conaffinity = 0, rgba = [0, 1, 0, 1])
+        task.add_geom(name = "goal", type = mj.mjtGeom.mjGEOM_CYLINDER, size = [self.task_radius, self.task_height, 0.0], contype = 0, conaffinity = 0, rgba = [0, 1, 0, 1])
         task.add_joint(name = "goal_x_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [1, 0, 0])
         task.add_joint(name = "goal_y_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [0, 1, 0])
 
     # function for adding obstacles:
-    def add_obstacle(self, obs_pos: list):
+    def add_primitive_obstacle(self, obs_pos: list):
         """
         this function spawns an obstacle in the environment based on a provided position
 
         Args:
-            obs_pos:        a list containing the position of the obstacle, in format ``[X, Y, Z]``
-
+            obs_pos:        a list containing the position of the obstacle, in format ``[X, Y]``
         """
-
-        # increment the obstacle counter:
-        self.obstacle_counter += 1
-
-        # add the obstacle to the worldbody:
-        obstacle = self.spec.worldbody.add_body(name = f"obstacle_{self.obstacle_counter}", pos = obs_pos)
-
         # randomly select a primitive shape:
         self.geom_type = np.random.choice([mj.mjtGeom.mjGEOM_CYLINDER, mj.mjtGeom.mjGEOM_BOX])
 
-        # add that shape to the environment:
+        # randomly select the size of the shape
         match self.geom_type:
             case mj.mjtGeom.mjGEOM_CYLINDER:
-                obstacle.add_geom(name = f"obstacle_{self.obstacle_counter}_geom",
-                                  type = self.geom_type,
-                                  size = [self.task_radius, self.task_radius, 0],
-                                  contype = 1,
-                                  conaffinity = 1,
-                                  rgba = [0, 0, 1, 1])
-                
+                obstacle_size = np.array([np.random.uniform(low=self.obstacle_size_low, high=self.obstacle_size_high), self.obstacle_height, 0.0])
             case mj.mjtGeom.mjGEOM_BOX:
-                obstacle.add_geom(name = f"obstacle_{self.obstacle_counter}_geom",
-                                  type = self.geom_type,
-                                  size = [self.task_radius, self.task_radius, self.task_radius],
-                                  contype = 1,
-                                  conaffinity = 1,
-                                  rgba = [0, 0, 1, 1])
+                obstacle_size = np.append(np.random.uniform(self.obstacle_size_low, self.obstacle_size_high, size=2), self.obstacle_height)
+
+        self.obstacle = self.spec.worldbody.add_body(name = f"obstacle_{self.obstacle_counter}", pos = np.append(obs_pos, self.obstacle_height))
+        self.obstacle.add_joint(name = f"obstacle_{self.obstacle_counter}_x_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [1, 0, 0])
+        self.obstacle.add_joint(name = f"obstacle_{self.obstacle_counter}_y_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [0, 1, 0])
+
+        # add that shape to the environment:
+        self.obstacle.add_geom(name = f"obstacle_{self.obstacle_counter}_geom",
+                               type = self.geom_type,
+                               size = obstacle_size,
+                               contype = 1,
+                               conaffinity = 1,
+                               rgba = [0, 0, 1, 1])
+        
+        # increment the obstacle counter:
+        self.obstacle_counter += 1
 
     # function for compiling the model:
     def compile(self):
@@ -349,7 +351,12 @@ class MakeEnv:
     # not sure if a recompile function is needed, that is the rationale behind splitting up make_spec and compile
 
     # function for making the environment:
-    def make_env(self, agent_pos: list, task_pos: list, n_rays: int, num_obstacles : int, obs_pos : list = [0, 0, 0]):
+    def make_env(self, 
+                 agent_pos: list, 
+                 task_pos: list, 
+                 n_rays: int, 
+                 n_obstacles: int = 0, 
+                 obs_pos : list | None = None):
         """ 
         this function uses the methods defined above and basically just chains them together to make and compile the environment.
         it is responsible for making the ``spec`` and applying the default settings (options, visual, lighting, camera, skybox, plane, walls),
@@ -359,7 +366,8 @@ class MakeEnv:
             agent_pos:          a list containing the position of the robot, in format ``[X, Y]``
             task_pos:           a list containing the position of the task, in format ``[X, Y]``
             n_rays:             an int specifying the desired number of rays for the LiDAR simulation
-        
+            n_obstacles:        number of obstacles
+            obs_pos:            a list containing the position of the obstacles, in format ``n_obstacles x [X, Y]``
         """
         # verify that the provided agent position is feasible:
         if abs(agent_pos[0]) + self.footprint_radius > self.ground_internal_length or abs(agent_pos[1]) + self.footprint_radius > self.ground_internal_length:
@@ -381,11 +389,13 @@ class MakeEnv:
         self.add_lidar(n_rays)
 
         # add the task:
-        self.add_task(task_pos = [task_pos[0], task_pos[1], self.task_height])
+        # self.add_task(task_pos = [task_pos[0], task_pos[1], self.task_height])
+        self.add_task(task_pos = [task_pos[0], task_pos[1], 0.16])
+
 
         # add obstacles:
-        # for _ in range(num_obstacles):
-        #     self.add_obstacle(obs_pos = obs_pos)
+        for i in range(n_obstacles):
+            self.add_primitive_obstacle(obs_pos = obs_pos[i])
 
         # compile into model:
         self.compile()

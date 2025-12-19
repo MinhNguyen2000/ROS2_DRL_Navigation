@@ -84,7 +84,13 @@
         "height" : 0.001,
         "contype" : 0,
         "conaffinity" : 0,
-        "rgba" : [1, 0, 0, 0.1]
+        "rgba" : [0, 0, 1, 0.1]
+},
+
+    "obstacle_settings" : {
+        "size_low": 0.1,
+        "size_high": 0.2,
+        "height": 0.1
     },
 
     "task_settings" : {
