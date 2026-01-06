@@ -8,7 +8,7 @@
 # ===================================================================
 # imports:
 from stable_baselines3 import SAC
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, DummyVecEnv
 from stable_baselines3.common.env_util import make_vec_env
 import torch
 
@@ -80,39 +80,94 @@ def init_model(hyperparameters : dict,
     return env, model
 
 # evaluation function for optuna studies:
-def eval_policy(env: gym.Env, 
+def eval_policy(eval_env: gym.Env, 
                 num_evals: int,
+                normalize: bool,
                 model):
-    # reward list:
-    eval_rew_hist = []
+    
+    # objective params:
+    returns = []
+    successes = []
 
-    # for each episode in the num_evals:
+    # for the number of episodes to eval for:
     for _ in range(num_evals):
-        obs, _ = env.reset()
-        done = False
+        # reset:
+        if normalize:
+            obs = eval_env.reset()
+        else:
+            obs, _ = eval_env.reset()
 
-        # initialize episodic reward:
-        eval_rew = 0
+        # initialize:
+        episode_return = 0
+        done = False
 
         # while False:
         while not done:
-            # get action and step:
-            with torch.no_grad():
-                action, _ = model.predict(obs, deterministic = True)
-                nobs, reward, term, trunc, _ = env.step(action)
+            # get action from policy:
+            action, _ = model.predict(obs, deterministic = True)
+
+            # step environment:
+            if normalize:
+                nobs, reward, term, info = eval_env.step(action)
+                episode_return += reward
+                done = term
+            else:
+                nobs, reward, term, trunc, _  = eval_env.step(action)
+                episode_return += reward
                 done = term or trunc
 
-                # advance reward:
-                eval_rew += reward
+            # advance observation, reset if not:
+            if not done:
+                obs = nobs
+            else:
+                if normalize:
+                    successes.append(info[0].get("is_success", False))
+                else:
+                    obs, _ = eval_env.reset()
 
-                # advance observation, reset if not:
-                obs = nobs if not done else env.reset()
+        # advance episodic return:
+        returns.append(episode_return)
 
-        # append:
-        eval_rew_hist.append(eval_rew)
+    return np.mean(returns), np.mean(successes)
+    # # reset the environment:
+    # if normalize:
+    #     obs = env.reset()
+    # else:
+    #     obs, _ = env.reset()
 
-    # return when done:
-    return np.mean(eval_rew_hist).round(3)
+    # # for each episode in the num_evals:
+    # for _ in range(num_evals):
+
+    #     # initialize:
+    #     eval_rew = 0
+    #     done = False
+
+    #     # while not done:
+    #     while not done:
+    #         action, _ = model.predict(obs, deterministic = True)
+    #         if normalize:
+    #             nobs, reward, term, info = env.step(action)
+    #             eval_rew += reward
+    #             # print(f"abs_diff: {nobs[0][0:2]} | reward: {reward}")
+    #             done = term
+    #         else:
+    #             nobs, reward, term, trunc, _ = env.step(action)
+    #             done = term or trunc
+
+    #         # advance observation, reset if not:
+    #         if not done:
+    #             obs = nobs
+    #         else:
+    #             if normalize:
+    #                 successes.append(info[0].get("is_success", False))
+    #                 # print(info, end = '\r')
+    #             else: 
+    #                 obs, _ = env.reset()
+
+    #     eval_rew_hist.append(eval_rew)
+
+    # # return when done:
+    # return np.mean(eval_rew_hist).round(3), np.mean(successes)
 
 # function for training a given model:
 def train_model(model,
@@ -215,9 +270,13 @@ def objective_model_params(trial):
     # suggest values for hyperparameters:
     # gamma = trial.suggest_categorical("gamma", [0.9, 0.95, 0.99, 0.995, 0.999])
     gamma = 0.99
-    actor_lr = trial.suggest_categorical("actor_lr", [1e-5, 2.5e-5, 5e-5, 1e-4, 2.5e-4, 5e-4, 1e-3])
-    critic_lr = trial.suggest_categorical("critic_lr", [1e-5, 2.5e-5, 5e-5, 1e-4, 2.5e-4, 5e-4, 1e-3])
-    buffer_size = trial.suggest_categorical("buffer_size", [int(1e6), int(1.5e6), int(2e6), int(2.5e6)])
+    # actor_lr = trial.suggest_categorical("actor_lr", [1e-5, 2.5e-5, 5e-5, 1e-4, 2.5e-4, 5e-4, 1e-3])
+    # critic_lr = trial.suggest_categorical("critic_lr", [1e-5, 2.5e-5, 5e-5, 1e-4, 2.5e-4, 5e-4, 1e-3])
+    actor_lr = 3e-5
+    critic_lr = 3e-4
+    # buffer_size = trial.suggest_categorical("buffer_size", [int(1e6), int(1.5e6), int(2e6), int(2.5e6)])
+    buffer_size = int(2e6)
+    batch_size = trial.suggest_categorical("batch_size", [512, 1024, 2048])
     # tau = trial.suggest_float("tau", low = 1e-3, high = 1e-2, step = 1e-3)
     tau = 5e-3
     ent_coef = trial.suggest_categorical("ent_coeff", ["auto", "auto_0.1"])
@@ -236,11 +295,11 @@ def objective_model_params(trial):
                        "actor_lr" : actor_lr,
                        "critic_lr" : critic_lr,
                        "buffer_size" : buffer_size,
-                       "batch_size" : 4096,
+                       "batch_size" : batch_size,
                        "tau" : tau,
                        "ent_coef" : ent_coef,
                        "train_freq" : train_freq, 
-                       "learning_starts" : 0,
+                       "learning_starts" : 50_000,
                        "target_update_interval" : target_update_interval,
                        "gradient_steps" : gradient_steps, 
                        "target_entropy" : target_entropy, 
@@ -272,30 +331,33 @@ def objective_model_params(trial):
     # need to now evaluate the policy:
     n_evals = 500
 
-    eval_env = make_vec_env("Nav2D-v0", 
-                                n_envs=4,
-                                env_kwargs={"max_episode_steps": 1_000,
-                                            "is_eval": True,
-                                            "randomization_options": randomization_options,
-                                            "reward_scale_options": reward_scale
-                                            },
-                                vec_env_cls = SubprocVecEnv,
-                                vec_env_kwargs = dict(start_method='forkserver'),
-                                seed = 42)
-
-
+    # make a single environment:
+    env = gym.make("Nav2D-v0",
+            render_mode = "rgb_array",
+            width = 1280, 
+            height = 1280,
+            default_camera_config = {"azimuth" : 90.0, "elevation" : -90.0, "distance" : 3, "lookat" : [0.0, 0.0, 0.0]}, 
+            camera_id = 2, 
+            max_episode_steps = 1000, 
+            is_eval = False,
+            reward_scale_options = reward_scale,
+            randomization_options = randomization_options,
+            visual_options = {8 : False})
+    
+    eval_env = DummyVecEnv([lambda: env])
     eval_env = VecNormalize.load(norm_path, eval_env)
     eval_env.training = False
     eval_env.norm_reward = False
-    model = SAC.Load(model_path, env = eval_env)
+    model = SAC.load(model_path, env = eval_env)
 
-    mean_eval_rew = eval_policy(env = eval_env, 
-                                num_evals = n_evals, 
-                                model = model)
+    mean_return, mean_successes = eval_policy(eval_env = eval_env, 
+                                              num_evals = n_evals, 
+                                              model = model,
+                                              normalize = normalize)
     eval_env.close()
 
     # return reward for optimizing:
-    return mean_eval_rew
+    return mean_return, mean_successes
 
 # main function:
 def main(do_studies : bool = False,
@@ -306,70 +368,71 @@ def main(do_studies : bool = False,
 
     # set the training parameters:
     number_of_runs = 100
-    steps_per_run = 25_000
+    steps_per_run = 100_000
 
     # if not using optuna:
     if not do_studies:
         # reward_scale:
-        reward_scale = {
-                        "rew_dist_scale" : 0.5,
-                        "rew_dist_approach_scale" : 25.0,     # 250 is 1, so 50 is 0.25 
-                        "rew_head_scale" : 1.0,
-                        "rew_head_approach_scale" : 25.0,     # 250 is 1, so 50 is 0.25
-                        "rew_goal_scale" : 5000.0,
-                        "rew_obst_scale" : -1000.0, 
-                        "rew_time" : -0.01}
-        
-        randomization_options = {"agent_freq" : 1,
-                        "goal_freq" : 1,
-                        "obstacle_freq" : 1}
-        
-        # model hyperparameters:
-        actor_arch = [256, 256]
-        critic_arch = [256, 256]
-        policy_kwargs = {"net_arch" : {"pi" : actor_arch, "qf" : critic_arch}}
+        for _ in range(5):
+            reward_scale = {
+                            "rew_dist_scale" : 2.0,               
+                            "rew_dist_approach_scale" : 25.0,
+                            "rew_head_scale" : 1.0,             
+                            "rew_head_approach_scale" : 25.0,   
+                            "rew_goal_scale" : 7_500,          
+                            "rew_obst_scale" : -2_000,        
+                            "rew_time" : -0.1}                 
+            
+            randomization_options = {"agent_freq" : 1,
+                            "goal_freq" : 1,
+                            "obstacle_freq" : 1}
+            
+            # model hyperparameters:
+            actor_arch = [256, 256]
+            critic_arch = [256, 256]
+            policy_kwargs = {"net_arch" : {"pi" : actor_arch, "qf" : critic_arch}}
 
-        hyperparameters = {"policy" : "MlpPolicy",
-                        "gamma" : 0.99,
-                        "actor_lr" : 3e-5,
-                        "critic_lr" : 3e-4,
-                        "buffer_size" : int(2e6),
-                        "batch_size" : 1024,
-                        "tau" : 5e-3,
-                        "ent_coef" : "auto",
-                        "train_freq" : 2,
-                        "learning_starts" : 50_000,
-                        "target_update_interval" : 1,
-                        "gradient_steps" : 4,
-                        "target_entropy" : "auto",
-                        "action_noise" : None,
-                        "verbose" : 0, 
-                        "gpu" : True,
-                        "policy_kwargs": policy_kwargs,
-                        "tensorboard_log" : tensorboard_log_dir}
-        
-        # get the model and the environment:
-        env, model = init_model(hyperparameters = hyperparameters, 
-                                reward_scale = reward_scale,
-                                randomization_options = randomization_options,
-                                normalize = normalize)
-        
-        # train the model:
-        _, _ = train_model(model = model, 
-                    env = env,
-                    dir_path = dir_path,
-                    reward_scale = reward_scale,
-                    randomization_options = randomization_options,
-                    hyperparameters = hyperparameters,
-                    number_of_runs = number_of_runs,
-                    steps_per_run = steps_per_run,
-                    normalize = normalize)
+            hyperparameters = {"policy" : "MlpPolicy",
+                            "actor_lr" : 3e-5,
+                            "critic_lr" : 3e-4,
+                            "buffer_size" : int(2.5e6),
+                            "learning_starts" : int(1e5),
+                            "batch_size" : 256,
+                            "tau" : 5e-3,
+                            "gamma" : 0.99,
+                            "train_freq" : 2,
+                            "target_update_interval" : 1,
+                            "gradient_steps" : 4,
+                            "ent_coef" : "auto",
+                            "target_entropy" : "auto",
+                            "action_noise" : None,
+                            "verbose" : 0, 
+                            "gpu" : True,
+                            "policy_kwargs": policy_kwargs,
+                            "tensorboard_log" : tensorboard_log_dir}
+            
+            # get the model and the environment:
+            env, model = init_model(hyperparameters = hyperparameters, 
+                                    reward_scale = reward_scale,
+                                    randomization_options = randomization_options,
+                                    normalize = normalize)
+            
+            # train the model:
+            _, _ = train_model(model = model, 
+                        env = env,
+                        dir_path = dir_path,
+                        reward_scale = reward_scale,
+                        randomization_options = randomization_options,
+                        hyperparameters = hyperparameters,
+                        number_of_runs = number_of_runs,
+                        steps_per_run = steps_per_run,
+                        normalize = normalize)
             
     # if using optuna:
     else:
         # set the study parameters:
         study_name = "model_params_dec13"
-        direction = "maximize"
+        directions = ["maximize", "maximize"]
         storage = "sqlite:///python/environments/results/optuna_results.db"
         load_if_exists = True
 
@@ -377,7 +440,7 @@ def main(do_studies : bool = False,
 
         # create the study object:
         study = optuna.create_study(study_name = study_name,
-                                    direction = direction,
+                                    directions = directions,
                                     storage = storage,
                                     load_if_exists = load_if_exists)
         
@@ -385,5 +448,5 @@ def main(do_studies : bool = False,
         study.optimize(objective_model_params, n_trials = 100)
 
 if __name__=="__main__":
-    main(do_studies = True, 
+    main(do_studies = False, 
          normalize = True)
