@@ -331,10 +331,10 @@ class Nav2D(MujocoEnv):
             for i in range(self.n_obstacles):
                 qpos[5+2*i:7+2*i] = self.np_random.uniform(-self.obstacle_bound, self.obstacle_bound, size=2) - self._obstacle_loc[i]
         
-        if self.is_eval and self.render_mode=="human":
-            qpos[:2] = self.agent_pose[:2] - self._agent_loc if (not self.collision) else self.init_qpos[:2]
-            qpos[2] = self.agent_pose[2] if (not self.collision) else self.init_qpos[2]
-            qvel[:3] = np.zeros(3)
+        # if self.is_eval and self.render_mode=="human":
+        #     qpos[:2] = self.agent_pose[:2] - self._agent_loc if (not self.collision) else self.init_qpos[:2]
+        #     qpos[2] = self.agent_pose[2] if (not self.collision) else self.init_qpos[2]
+        #     qvel[:3] = np.zeros(3)
 
         self.set_state(qpos, qvel)
         ob = self._get_obs()
@@ -478,11 +478,14 @@ class Nav2D(MujocoEnv):
         info = {}
 
         if term:
-            info["is_success"]          = bool(distance_cond)
-            info["obstacle_cond"]       = bool(obstacle_cond)
+            info["is_success"]          = bool(distance_cond)        # if successful
+            info["obstacle_cond"]       = bool(obstacle_cond)        # if not successful
+
+            # these are the progress conditions:
             info["dist_progress_cond"]  = (self.dist_progress_count >= self.progress_threshold)
             info["head_progress_cond"]  = (self.head_progress_count >= self.progress_threshold)
 
+            # flag for collision:
             self.collision = bool(obstacle_cond)
             
         # 4. reward:
