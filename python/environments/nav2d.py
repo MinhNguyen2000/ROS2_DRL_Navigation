@@ -467,7 +467,7 @@ class Nav2D(MujocoEnv):
         else:
             self.dist_progress_count = 0
 
-        # when the abs_diff is more than 15 degress and still growing:
+        # when the abs_diff is more than 15 degrees and still growing:
         if abs_diff >= self.prev_abs_diff and (abs_diff > np.deg2rad(15)):
             self.head_progress_count += 1
         else:
@@ -496,34 +496,38 @@ class Nav2D(MujocoEnv):
         else:
             #--- DISTANCE REWARD:
             # this reward term incentivizes closing the distance between the agent and the goal:
-            rew_dist = (self.d_init - d_goal) / self.d_init         # distance reward relative to the starting state 
-            self.rew_dist_scaled = self.rew_dist_scale * rew_dist
+            # rew_dist = (self.d_init - d_goal) / self.d_init         # distance reward relative to the starting state 
+            # self.rew_dist_scaled = self.rew_dist_scale * rew_dist
 
             #--- DISTANCE APPROACH REWARD:
+            # this reward term incentivizes approaching the goal, and rewards 0 otherwise:
             rew_dist_approach = max((self.d_goal_last - d_goal), 0)
             self.rew_dist_approach_scaled = rew_dist_approach * self.rew_dist_approach_scale
 
             #---  BASE HEADING REWARD:
             # penalize based on the absolute difference in heading:
-            if action[0] >= 0.05:
-                rew_head = 1.0 - np.tanh(abs_diff / np.pi)
+            # if action[0] >= 0.05:                 # gated by forward velocity
+            # if (self.d_goal_last - d_goal) > 0:     # gated by making progress toward the goal 
+            #     rew_head = 1.0 - np.tanh(abs_diff / np.pi)
 
-                # bonus reward for being within +/- 5 degree of the desired trajectory:
-                angle_threshold_rad = np.deg2rad(2.5)
-                if abs_diff <= angle_threshold_rad:
-                    rew_head += 1 - 1 / angle_threshold_rad * abs_diff
-            else: rew_head = 0
+            #     # bonus reward for being within +/- 5 degree of the desired trajectory:
+            #     # angle_threshold_rad = np.deg2rad(2.5)
+            #     # if abs_diff <= angle_threshold_rad:
+            #     #     rew_head += 1 - 1 / angle_threshold_rad * abs_diff
+            # else: rew_head = 0
 
             # scale reward:
-            self.rew_head_scaled = self.rew_head_scale * rew_head
+            # self.rew_head_scaled = self.rew_head_scale * rew_head
 
             #--- HEADING APPROACH REWARD:
+            # this reward term incentivizes approaching the required heading, and rewards 0 otherwise
             rew_head_approach = max((self.prev_abs_diff - abs_diff), 0)
             self.rew_head_approach_scaled = self.rew_head_approach_scale * rew_head_approach
 
             #--- TOTAL REWARD TERM:
-            rew = self.rew_head_scaled + self.rew_head_approach_scaled + self.rew_dist_scaled + self.rew_dist_approach_scaled + self.rew_time
+            # rew = self.rew_head_scaled + self.rew_head_approach_scaled + self.rew_dist_scaled + self.rew_dist_approach_scaled + self.rew_time
             # rew = self.rew_dist_scaled + self.rew_dist_approach_scaled + self.rew_head_scaled + self.rew_time
+            rew = self.rew_dist_approach_scaled + self.rew_head_approach_scaled + self.rew_time
 
             # print to user:
             if self.render_mode == "human":
@@ -533,13 +537,13 @@ class Nav2D(MujocoEnv):
                 # # lidar debug
                 # print(lidar_obs)
 
-                # # reward debug
-                # print(f" @ episode {self.episode_counter} | "
-                #       f"rew_dist: {self.rew_dist_scaled: 6.4f} | "
-                #       f"rew_dist_app: {self.rew_dist_scaled: 6.4f} | "
-                #       f"rew_head: {self.rew_head_scaled: 6.4f} | "
-                #       f"rew_head_app: {self.rew_head_approach_scaled: 6.4f}        ",
-                #       end="\r")
+                # reward debug
+                print(f" @ episode {self.episode_counter} | "
+                      f"rew_dist: {self.rew_dist_scaled: 6.4f} | "
+                      f"rew_dist_app: {self.rew_dist_approach_scaled: 6.4f} | "
+                      f"rew_head: {self.rew_head_scaled: 6.4f} | "
+                      f"rew_head_app: {self.rew_head_approach_scaled: 6.4f}        ",
+                      end="\r")
                 pass
                 
         # advance histories:
