@@ -52,13 +52,13 @@ def main():
         "tensorboard_dir":  "Nav2D_TD3_SB3_tensorboard"}
 
     default_reward_scale = {
-        "rew_dist_scale":           2.0,
-        "rew_dist_approach_scale":  25.0,
-        "rew_head_scale":           1.0,
-        "rew_head_approach_scale":  25.0,
+        "rew_dist_scale":           0.0,
+        "rew_dist_approach_scale":  125.0,
+        "rew_head_scale":           0.0,
+        "rew_head_approach_scale":  125.0,
         "rew_time":                 -0.1,
-        "rew_goal_scale":           10_000.0,
-        "rew_obst_scale":           -2_000.0}
+        "rew_goal_scale":           5_000.0,
+        "rew_obst_scale":           -1_000.0}
 
     default_randomization_options = {"agent_freq": 1, "goal_freq": 1, "obstacle_freq":1}
 
@@ -92,10 +92,14 @@ def main():
               models_to_save: int = 25,
               hyperparam_dict: dict = default_hyperparam_dict,
               reward_scale: dict = default_reward_scale,
-              randomization_options: dict = default_randomization_options
+              randomization_options: dict = default_randomization_options,
+              obstacle_options: dict = default_obstacle_options
               ):
 
-        env = make_env()
+        env = make_env(n_proc=24,
+                       reward_scale=reward_scale,
+                       randomization_options=randomization_options,
+                       obstacle_options=obstacle_options)
     
         n_actions = env.get_attr("action_space")[0].shape[0]        # obtain the size of the action_space from the list of action_space among the n_proc subprocess envs
 
@@ -172,7 +176,7 @@ def main():
         hyperparam_codified = f"{learning_rate}_{buffer_size}_{learning_starts}_{batch_size}_{tau}_{gamma}_"
         hyperparam_codified += f"{train_freq}_{gradient_steps}_{act_noise_std}_{n_steps}_{policy_delay}_{target_policy_noise}_{target_noise_clip}_"
         hyperparam_codified += f"{reward_scale['rew_dist_scale']}_{reward_scale['rew_dist_approach_scale']}_{reward_scale['rew_head_scale']}_{reward_scale['rew_head_approach_scale']}_{reward_scale['rew_time']}_{reward_scale['rew_goal_scale']}_{reward_scale['rew_obst_scale']}_"
-        hyperparam_codified += f"{randomization_options['agent_freq']}_{randomization_options['goal_freq']}"
+        hyperparam_codified += f"{randomization_options['agent_freq']}_{randomization_options['goal_freq']}_{obstacle_options['n_obstacles']}"
 
         timestamp = datetime.now().strftime("%y%m%d_%H%M")
         hyperparam_codified_time = f"{timestamp}_" + hyperparam_codified
@@ -183,8 +187,8 @@ def main():
             json.dump(data, f, indent=2)
 
         # DEFINE TRAINING CALLBACK FUNCTIONS
-        curriculum_callback = CurriculumCallback(success_window=50, threshold=0.75)
-        advanced_env_callback = AdvanceEnvCallback(success_window=50, success_threshold=0.9)
+        # curriculum_callback = CurriculumCallback(success_window=50, threshold=0.75)
+        advanced_env_callback = AdvanceEnvCallback(success_window=50, success_threshold=0.75)
 
         # TRAINING
         for run in tqdm(range(1,number_of_runs+1), ncols = 100, colour = "#33FF00", desc = f"{result_number} training progress"):
@@ -192,7 +196,7 @@ def main():
             model.learn(total_timesteps = steps_per_run, 
                         tb_log_name=f"{result_number}",
                         reset_num_timesteps = False,
-                        callback=advanced_env_callback
+                        # callback=advanced_env_callback
                         )
 
             # save a model and the normalization stats once in a while
@@ -214,58 +218,6 @@ def main():
 
         return model_path, norm_path
     
-    def eval_policy(env: gym.Env, 
-         n_evals: int, 
-         model):
-        
-        # unwrap the environment to obtain maximum episode length and arena size
-        if isinstance(env, DummyVecEnv):
-            max_eps_length = env.envs[0].spec.max_episode_steps
-            size = env.envs[0].unwrapped.size
-            is_vec_env = True
-        elif isinstance(env, (SubprocVecEnv, VecNormalize)):
-            max_eps_length = env.get_attr("spec")[0].max_episode_steps
-            size = env.get_attr("size")[0]
-            is_vec_env = True
-        else:    
-            max_eps_length = env.spec.max_episode_steps
-            size = env.unwrapped.size
-            is_vec_env = False
-
-        max_env_size = np.sqrt(2* (2*size)**2)
-
-        # empty list to later store the results
-        success_window  = deque(maxlen=n_evals)
-        eps_len_window  = deque(maxlen=n_evals)
-        dfinal_window   = deque(maxlen=n_evals)
-        
-        if is_vec_env:      # evaluating with a SB3 vectorized environment
-            n_envs = env.num_envs
-            obss = env.reset()
-            eps_evaluated = 0
-
-            while eps_evaluated <= n_evals:
-                action, _ = model.predict(obss, deterministic = True)
-                original_obss = env.get_original_obs()
-                nobss, rews, dones, infos = env.step(action)
-
-                for i, (done, info) in enumerate(zip(dones, infos)):
-                    if done:
-                        eps_evaluated += 1
-                        success_window.append(info.get("is_success", False))
-                        eps_len_window.append(info.get('episode', {}).get('l', None))
-                        dfinal_window.append(original_obss[i][2]) 
-                        # TODO - how to grab the unnormalized final distance from the environment that terminated
-                obss = nobss
-        else:               # TODO - evaluation for a core gymnasium environment
-            pass
-
-        mean_success    = np.mean(success_window)
-        mean_ep_len     = np.mean(eps_len_window)/max_eps_length
-        mean_dfinal     = np.mean(dfinal_window)/max_env_size
-
-        return mean_success, mean_ep_len, mean_dfinal
-
     class CurriculumCallback(BaseCallback):
         def __init__(self, 
                      success_window:int = 100, 
@@ -457,24 +409,25 @@ def main():
             Method that is triggered every training step to check
             1. 
             """
-            # grab the dones and infos lists from the parallel envs
+            # OBTAIN INFO FROM ALL ENVIRONMENTS
             dones = self.locals["dones"]
             infos = self.locals["infos"]
 
-            # check all dones and infos for a terminal episode
+            # CHECK TERMINAL EPISODES AND UPDATE SUCCESS/FAILURE COUNTS
             for i, (done, info) in enumerate(zip(dones, infos)):
                 if done:
                     self.success_buffer.append(info.get("is_success", False))
                     for k in self.term_cond.keys(): self.term_cond[k] += int(info.get(k, False))
             
-            # when collect enough terminated episodes, check the success rate
+            # ADVANCE ENVIRONMENT BASED ON SUCCESS RATE
             if len(self.success_buffer) >= self.success_window:
                 success_rate = sum(self.success_buffer) / len(self.success_buffer)
                 
-                # if training success_rate > threshold and not at max environment level, increase environment level
+                # increase environment level if 1. the success rate passes, and 2. the env level is not already maxed out
                 if success_rate >= self.success_threshold and self.env_level < self.max_level:
                     self._report_termination_cond()
                     self.env_level = min(self.env_level + 1, self.max_level)
+                    print(f"Increased the environment level to {self.env_level}")
                     self.env_advance = True
                     self.success_buffer.clear()
             return True
@@ -486,12 +439,18 @@ def main():
             
             # DESTROY OLD ENVIRONMENT (to release the subprocesses)
             old_env = self.model.get_env()
+            reward_scale_option     = old_env.get_attr("reward_scale_options")[0]
+            randomization_options   = old_env.get_attr("randomization_options")[0]
+            obstacle_options        = old_env.get_attr("obstacle_options")[0]
             if old_env is not None:
                 old_env.close()
 
             # CREATE AND SET NEW ENVIRONMENT
             self.n_obstacles = self.obstacle_per_level * self.env_level
-            env = make_env(obstacle_options={'n_obstacles': self.n_obstacles})
+            env = make_env(n_proc=24,
+                           reward_scale=reward_scale_option,
+                           randomization_options=randomization_options,
+                           obstacle_options=obstacle_options)
             env.reset()
             self.model.set_env(env)
             model_env = self.model.get_env()
@@ -521,69 +480,17 @@ def main():
                     f"stall_d={stall_d_count} ({stall_d_count/eps_sum*100:5.2f}%) | "
                     f"stall_h={stall_h_count} ({stall_h_count/eps_sum*100:5.2f}%) | "
                     f"trunc={trunc_count} ({trunc_count/eps_sum*100:5.2f}%)")
-
-    def objective_rew_scale(trial):        
-        reward_scale = {
-            "rew_dist_scale":           trial.suggest_categorical("w_dist", choices=[0.1, 0.25, 0.5, 1.0]),
-            "rew_dist_approach_scale":  trial.suggest_categorical("w_dist_app", choices=[10.0, 25.0, 50.0]),
-            "rew_head_scale":           trial.suggest_categorical("w_head", choices=[0.1, 0.25, 0.5, 1.0]),
-            "rew_head_approach_scale":  trial.suggest_categorical("w_head_app", choices=[10.0, 25.0, 50.0]),
-            "rew_time":                 trial.suggest_categorical("w_time", choices=[-0.01, -0.05, -0.1, -0.25]),
-            "rew_goal_scale":           5_000,
-            "rew_obst_scale":           -1_000
-        }
-
-        hyperparam_dict = {
-            "model_dir":        "Nav2D_TD3_SB3_optuna_results",
-            "tensorboard_dir":  "Nav2D_TD3_SB3_optuna_tensorboard"
-        }
-
-        model_path, norm_path = train(num_runs=250,
-                                      steps_per_run=20_000,
-                                      models_to_save=5,
-                                      hyperparam_dict=hyperparam_dict,
-                                      reward_scale=reward_scale)
-        
-        # Evaluate the policy
-        print("Evaluating......")
-        n_evals = 500
-        eval_env = make_vec_env("Nav2D-v0", 
-                                n_envs=4,
-                                env_kwargs={"max_episode_steps": 1_000,
-                                            "is_eval": True,
-                                            "randomization_options": default_randomization_options,
-                                            "reward_scale_options": default_reward_scale
-                                            },
-                                vec_env_cls=SubprocVecEnv,
-                                vec_env_kwargs=dict(start_method='forkserver'))
-        eval_env = VecNormalize.load(norm_path, eval_env)
-        eval_env.training = False
-        eval_env.norm_reward = False
-        model = TD3.load(model_path, env=eval_env)
-        success, ep_len, dfinal = eval_policy(env=eval_env, n_evals=n_evals, model=model)
-        eval_env.close()
-
-        return round(success,3), round(ep_len,3), round(dfinal,3)
     
-    def rew_scale_optuna():
-        study_name = "rew_scale_dec11"
-        study = optuna.create_study(storage=f"sqlite:///python/environments/results/optuna_study.db", 
-                                    study_name=study_name, 
-                                    load_if_exists=True,
-                                    direction='maximize')
-        study.optimize(objective_rew_scale, n_trials=50)
-
-    # # RUN OPTUNA STUDY
-    # rew_scale_optuna()
     
     # # RUN ONE TRAINING
-    for i in range(1):
-        train(num_runs=500,
+    for i in range(3):
+        train(num_runs=100,
               steps_per_run=20_000, 
               models_to_save=20,
               hyperparam_dict=default_hyperparam_dict,
               reward_scale=default_reward_scale,
-              randomization_options=default_randomization_options)
+              randomization_options=default_randomization_options,
+              obstacle_options=default_obstacle_options)
 
 if __name__=="__main__":
     main()
