@@ -19,48 +19,55 @@ from collections import deque
 
 
 result_dir = os.path.join(os.getcwd(),"python","environments")
-result_nums = [f"result_000{i}"for i in range(73, 75)]
-result_nums = ["result_00115"]
+result_nums = [f"result_00{i}"for i in range(179, 182)]
+result_nums = ["result_00183"]
 run_num = 500
 goal_bound_ratio = 1.0
 
+# testing parameters
+n_test = 50
+report_freq = 100
+success_window = deque(maxlen=report_freq)
+normalized = True
+
+# environment options
+width = 800
+height = 800
+render_mode = "human" if n_test<=100 else "rgb_array"
+camera_id = 2
+
+DEFAULT_CAMERA = "overhead_camera"
+ENABLE_FRAME = True                     # enable the body frames
+RENDER_EVERY_FRAME = True              # similar sim speed as MuJoCo rendering when set to False, else slower
+
+reward_scale = {
+        "rew_dist_scale":           0.0,
+        "rew_dist_approach_scale":  75.0,
+        "rew_head_scale":           0.0,
+        "rew_head_approach_scale":  75.0,
+        "rew_time":                 -0.1,
+        "rew_goal_scale":           3_000.0,
+        "rew_obst_scale":           -1_000.0
+}
+
+randomization_options = {
+    "agent_freq": 1,
+    "goal_freq": 1, 
+    "obstacle_freq": 1
+}
+
+obstacle_options = {
+    "n_obstacles": 0
+}
+
 def eval():
-    print(f"Evaluating {result_nums}, run {run_num:3d}")
+    
     for result_num in result_nums:
+        print(f"Evaluating {result_num}, run {run_num:3d}")
         result_path = os.path.join(result_dir, "results", "Nav2D_TD3_SB3_results", result_num)
         run_path = os.path.join(result_path, f"run_{run_num}")
+
         
-        # testing parameters
-        n_test = 50
-        report_freq = 100
-        success_window = deque(maxlen=report_freq)
-        normalized = True
-
-        # environment options
-        width = 800
-        height = 800
-        render_mode = "human" if n_test<=50 else "rgb_array"
-        camera_id = 2
-
-        DEFAULT_CAMERA = "overhead_camera"
-        ENABLE_FRAME = True                     # enable the body frames
-        RENDER_EVERY_FRAME = True              # similar sim speed as MuJoCo rendering when set to False, else slower
-
-        reward_scale= {
-            "rew_dist_scale":           2.0,
-            "rew_dist_approach_scale":  25.0,
-            "rew_head_scale":           1.0,
-            "rew_head_approach_scale":  25.0,
-            "rew_time":                 -0.1,
-            "rew_goal_scale":           10_000.0,
-            "rew_obst_scale":           -2_000.0
-        }
-        
-        randomization_options = {
-            "agent_freq": 1,
-            "goal_freq": 1,
-            "obstacle_freq": 1
-        }
         term_cond = {
             "is_success": 0,
             "obstacle_cond": 0,
@@ -71,20 +78,20 @@ def eval():
             
         core_env = gym.make("Nav2D-v0", render_mode=render_mode, 
                             width=width,height=height,
-                            default_camera_config=default_camera_config,
                             camera_id=camera_id,
                             max_episode_steps=2_500,
                             is_eval=True,
                             reward_scale_options=reward_scale,
                             randomization_options=randomization_options,
-                            visual_options = {2: True, 8: True}
+                            obstacle_options=obstacle_options,
+                            visual_options = {2: True, 8: False}
                             )
         if normalized:
             if render_mode == "human":
                 test_env = DummyVecEnv([lambda: core_env])
             else:
                 test_env = make_vec_env("Nav2D-v0", 
-                                        n_envs=20,
+                                        n_envs=2,
                                         env_kwargs={"max_episode_steps": 2_500,
                                                     "is_eval": True,
                                                     "reward_scale_options": reward_scale,

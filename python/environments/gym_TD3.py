@@ -35,7 +35,7 @@ import optuna
 def main():
 
     default_hyperparam_dict = {
-        "lr":               1e-3,
+        "lr":               5e-4,
         "buffer_size":      2e6,
         "learn_start":      1e5,
         "batch_size":       256,
@@ -53,11 +53,11 @@ def main():
 
     default_reward_scale = {
         "rew_dist_scale":           0.0,
-        "rew_dist_approach_scale":  125.0,
-        "rew_head_scale":           0.0,
-        "rew_head_approach_scale":  125.0,
-        "rew_time":                 -0.1,
-        "rew_goal_scale":           5_000.0,
+        "rew_dist_approach_scale":  75.0,
+        "rew_head_scale":           0.1,
+        "rew_head_approach_scale":  75.0,
+        "rew_time":                 -0.5,
+        "rew_goal_scale":           3_000.0,
         "rew_obst_scale":           -1_000.0}
 
     default_randomization_options = {"agent_freq": 1, "goal_freq": 1, "obstacle_freq":1}
@@ -484,7 +484,7 @@ def main():
     
     # # RUN ONE TRAINING
     for i in range(3):
-        train(num_runs=100,
+        train(num_runs=500,
               steps_per_run=20_000, 
               models_to_save=20,
               hyperparam_dict=default_hyperparam_dict,
