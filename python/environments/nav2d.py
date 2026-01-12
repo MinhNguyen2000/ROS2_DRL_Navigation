@@ -59,7 +59,6 @@ class Nav2D(MujocoEnv):
         self.n_rays = 360
         self.n_ray_groups = 8
         self._ray_per_group = int(self.n_rays/self.n_ray_groups)
-        self.n_obstacles = obstacle_options.get("n_obstacles", 0)
 
         self.linear_scale = 2
         self.angular_scale = 3
@@ -85,6 +84,7 @@ class Nav2D(MujocoEnv):
 
         # --- RANDOMIZATION INITIALIZATION
         self.episode_counter = 0
+        self.randomization_options = randomization_options
         self.agent_frequency    = randomization_options.get("agent_freq", 1)    if randomization_options else 1
         self.goal_frequency     = randomization_options.get("goal_freq", 1)    if randomization_options else 1
         self.obstacle_frequency = randomization_options.get("obstacle_freq", 1) if randomization_options else 1
@@ -109,6 +109,7 @@ class Nav2D(MujocoEnv):
         self.goal_bound = self.goal_bound_final
 
         # --- REWARD SCALE INITIALIZATION
+        self.reward_scale_options       = reward_scale_options
         self.rew_dist_scale             = reward_scale_options.get("rew_dist_scale", 1)             if reward_scale_options else 1
         self.rew_dist_approach_scale    = reward_scale_options.get("rew_dist_approach_scale", 250)  if reward_scale_options else 100
         self.rew_head_scale             = reward_scale_options.get("rew_head_scale", 1)             if reward_scale_options else 1
@@ -123,17 +124,22 @@ class Nav2D(MujocoEnv):
         self.rew_dist_scaled = 0
         self.rew_dist_approach_scaled = 0
 
-        # --- whether an evaluation environment or not
-        self.is_eval = is_eval
-        
+        # AGENT/TASK INITIALIZATION
         # --- define the uninitialized location of the agent and the target
         self._agent_loc = [-(self.size - 2*self.agent_radius), -(self.size - 2*self.agent_radius)]
         self._task_loc = [(self.size - 2*self.agent_radius), (self.size - 2*self.agent_radius)]
         # self._agent_loc = [0, 0]
         # self._task_loc = [0, 0]
-        self._obstacle_loc = np.random.uniform(-self.obstacle_bound, self.obstacle_bound, size=(self.n_obstacles,2))
         
-        # --- load simulation params and initialize the simulation
+        # --- OBSTABLE INITIALIZATION
+        self.obstacle_options = obstacle_options
+        self.n_obstacles = obstacle_options.get("n_obstacles", 0)
+        self._obstacle_loc = np.random.uniform(-self.obstacle_bound, self.obstacle_bound, size=(self.n_obstacles,2))
+
+        # --- whether an evaluation environment or not
+        self.is_eval = is_eval
+        
+        # --- LOAD SIMULATION PARAMETERS AND INITIALIZE THE SIMULATION
         env =  MakeEnv(params)
         env.light_pos = np.array([0, 0, 1]) * 5 * self.size
         default_camera_config["distance"] = 3 * self.size
