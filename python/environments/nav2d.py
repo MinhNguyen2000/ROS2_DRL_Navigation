@@ -70,6 +70,8 @@ class Nav2D(MujocoEnv):
             params = json.load(f)
         self.size = params["ground_settings"]["internal_length"]
         self.agent_radius = params["agent_footprint_settings"]["radius"]
+        self.goal_radius = params["task_settings"]["radius"]
+        self.allowance = params["obstacle_settings"]["allowance"]
 
         scaled_inner_length = 2 * (self.size - self.agent_radius)
         self.dmax = np.sqrt(2 * scaled_inner_length ** 2, dtype = np.float32)
@@ -79,7 +81,7 @@ class Nav2D(MujocoEnv):
         self.dist_progress_count = 0
         self.head_progress_count = 0
         self.progress_threshold = 100 if not is_eval else 500   # number of maximum allowable episodes where the agent has not made any progress toward the goal
-        self.obstacle_threshold = 0.05 + self.agent_radius
+        self.obstacle_threshold = self.allowance + self.agent_radius    # this is basically the footprint radius of the agent
         self.collision = False
 
         # --- RANDOMIZATION INITIALIZATION
@@ -101,7 +103,7 @@ class Nav2D(MujocoEnv):
 
         # obstacle randomization bounds
         self.obstacle_size_high = params["obstacle_settings"]["size_high"]
-        self.obstacle_bound = self.size - self.obstacle_size_high
+        self.obstacle_bound = self.size - (2 * self.obstacle_threshold + self.obstacle_size_high)
 
         # goal randomization bounds
         self.goal_bound_init = 0
@@ -128,13 +130,18 @@ class Nav2D(MujocoEnv):
         # --- define the uninitialized location of the agent and the target
         self._agent_loc = [-(self.size - 2*self.agent_radius), -(self.size - 2*self.agent_radius)]
         self._task_loc = [(self.size - 2*self.agent_radius), (self.size - 2*self.agent_radius)]
-        # self._agent_loc = [0, 0]
-        # self._task_loc = [0, 0]
         
         # --- OBSTABLE INITIALIZATION
         self.obstacle_options = obstacle_options
         self.n_obstacles = obstacle_options.get("n_obstacles", 0)
-        self._obstacle_loc = np.random.uniform(-self.obstacle_bound, self.obstacle_bound, size=(self.n_obstacles,2))
+
+        # define the buffers for spawning:
+        self.obs_goal_buffer = self.goal_radius + 2 * self.obstacle_threshold + self.obstacle_size_high + self.allowance
+        self.obs_agent_buffer = self.obstacle_threshold + self.obstacle_size_high + self.allowance
+        self.obs_obs_buffer = 2 * self.obstacle_threshold + 2 * self.obstacle_size_high + 2 * self.allowance
+
+        # get obstacle positions:
+        self._obstacle_loc = self._set_obstacle_positions(goal_pos = self._task_loc, agent_pos = self._agent_loc)
 
         # --- whether an evaluation environment or not
         self.is_eval = is_eval
@@ -145,9 +152,8 @@ class Nav2D(MujocoEnv):
         default_camera_config["distance"] = 3 * self.size
         env.make_env(agent_pos = self._agent_loc, 
                      task_pos = self._task_loc, 
-                     n_rays = self.n_rays,
-                     n_obstacles=self.n_obstacles,
-                     obs_pos=self._obstacle_loc)
+                     n_rays = self.n_rays, 
+                     obs_pos = self._obstacle_loc)
         self.model = env.model
         self.model.vis.global_.offwidth = width
         self.model.vis.global_.offheight = height
@@ -298,6 +304,76 @@ class Nav2D(MujocoEnv):
 
         return self._obs_buffer
 
+    def _set_obstacle_positions(self,
+                                agent_pos : list,
+                                goal_pos  : list):
+        """
+        internal method for setting the position of the obstacles such that they:
+            - are far enough from the borders of the arena
+            - they are far enough from the position of the goal
+            - they are far enough from the position of the agent
+            - they are far enough from the position of other obstacles
+        
+        such that it can be ensured that no one obstacle spawns collided with another or that there is no navigable path between obstacles.
+
+        :param agent_pos:   a list containing the coordinates of the agent in the worldbody in form ``[X, Y]``.
+        :param goal_pos:    a list containing the coordinates of the goal in the worldbody in form ``[X, Y]``.
+
+        :type agent_pos: list
+        :type goal_pos: list
+        
+        """
+        # need to first initialize a list of obstacle positions:
+        obstacle_loc = []
+
+        # initialize a list of things to check:
+        spawn_queue = []
+
+        # add the goal and the agent positions to the queue:
+        spawn_queue.append(goal_pos)
+        spawn_queue.append(agent_pos)
+
+        # loop over the number of obstacles specified by the user:
+        for i in range(self.n_obstacles):
+            # define a bool for completion:
+            satisfied = False
+
+            # while the obstacle is not placed:
+            while not satisfied:
+                # generate an initial position for an obstacle: 
+                candidate_obstacle = np.random.uniform(low = -self.obstacle_bound, high = self.obstacle_bound, size = 2)
+
+                # counter for passes:
+                passes = 0
+
+                # check to see if the obstacle position is acceptable:
+                for item, _ in enumerate(spawn_queue):
+                    # determine which buffer to use:
+                    if item == 0:
+                        buffer = self.obs_goal_buffer
+                    elif item == 1:
+                        buffer = self.obs_agent_buffer
+                    else:
+                        buffer = self.obs_obs_buffer
+
+                    # compute distance between candidate obstacle and item in spawn queue:
+                    distance = np.linalg.norm(candidate_obstacle - spawn_queue[item])
+
+                    # check to see if it passes:
+                    if distance >= buffer:
+                        passes += 1
+                
+                # check to see if we are satisfied with the placement:
+                if passes == 2 + i:
+                    satisfied = True
+
+            # append this position to the queue of things to check, as well as the obstacle_loc list:
+            spawn_queue.append(candidate_obstacle)
+            obstacle_loc.append(candidate_obstacle)
+
+        # return the obstacle locations:
+        return obstacle_loc
+
     def reset_model(self, 
                     agent_randomize: bool = False, 
                     goal_randomize: bool = False, 
@@ -323,7 +399,8 @@ class Nav2D(MujocoEnv):
             # randomize the pose of the agent by randomly sampling within self.angle_bound/2 away from the required heading
             dx, dy = (qpos[3:5] + self ._task_loc) - (qpos[0:2] + self._agent_loc)
             bearing = np.arctan2(dy, dx, dtype=np.float32) % (2*np.pi)
-            qpos[2] = self.np_random.uniform(size = 1, low = bearing - self.angle_bound / 2, high = bearing + self.angle_bound / 2) % (2 * np.pi)
+            # qpos[2] = self.np_random.uniform(size = 1, low = bearing - self.angle_bound / 2, high = bearing + self.angle_bound / 2) % (2 * np.pi)
+            qpos[2] = self.np_random.uniform(size = 1, low = -self.angle_bound, high = self.angle_bound) % (2 * np.pi)
             # qpos[2] = self.np_random.uniform(size = 1, low = 0.0, high = np.pi/2)
 
             # randomize the velocity of the agent:
@@ -334,9 +411,22 @@ class Nav2D(MujocoEnv):
             self.init_qvel[0:2] = qvel[0:2]
 
         if obstacle_randomize:
+            # need to get the new position of the agent in the worldbody:
+            agent_pos = qpos[0:2] + self._agent_loc
+
+            # need to get the new position of the goal in the worldbody:
+            goal_pos = qpos[3:5] + self._task_loc
+
+            # # generate new positions for the obstacles:
+            # obstacle_locs = self._set_obstacle_positions(agent_pos = agent_pos, goal_pos = goal_pos)
+
+            # # set the new position of these obstacles:
+            # for i in range(self.n_obstacles):
+            #     qpos[5+2*i:7+2*i] = obstacle_locs[i] - self._obstacle_loc[i]
+
             for i in range(self.n_obstacles):
                 qpos[5+2*i:7+2*i] = self.np_random.uniform(-self.obstacle_bound, self.obstacle_bound, size=2) - self._obstacle_loc[i]
-        
+                
         # if self.is_eval and self.render_mode=="human":
         #     qpos[:2] = self.agent_pose[:2] - self._agent_loc if (not self.collision) else self.init_qpos[:2]
         #     qpos[2] = self.agent_pose[2] if (not self.collision) else self.init_qpos[2]
@@ -375,7 +465,6 @@ class Nav2D(MujocoEnv):
         
 
         # --- CHECK RANDOMIZATION CONDITIONS
-        
         if not self.is_eval:
             # agent randomization
             if self.episode_counter % self.agent_frequency == 0:
@@ -479,7 +568,8 @@ class Nav2D(MujocoEnv):
         else:
             self.head_progress_count = 0
         
-        term = distance_cond or obstacle_cond or (self.dist_progress_count >= self.progress_threshold) or (self.head_progress_count >= self.progress_threshold)
+        term = distance_cond or obstacle_cond 
+        # or (self.dist_progress_count >= self.progress_threshold) or (self.head_progress_count >= self.progress_threshold)
         
         info = {}
 
@@ -513,7 +603,7 @@ class Nav2D(MujocoEnv):
             #---  BASE HEADING REWARD:
             # penalize based on the absolute difference in heading:
             # if action[0] >= 0.05:                 # gated by forward velocity
-            # if (self.d_goal_last - d_goal) > 0:     # gated by making progress toward the goal 
+            # if (self.d_goal_last - d_goal) > 1e-5:  # gated by making progress toward the goal 
             #     rew_head = 1.0 - np.tanh(abs_diff / np.pi)
 
             #     # bonus reward for being within +/- 5 degree of the desired trajectory:
@@ -531,9 +621,7 @@ class Nav2D(MujocoEnv):
             self.rew_head_approach_scaled = self.rew_head_approach_scale * rew_head_approach
 
             #--- TOTAL REWARD TERM:
-            # rew = self.rew_head_scaled + self.rew_head_approach_scaled + self.rew_dist_scaled + self.rew_dist_approach_scaled + self.rew_time
-            # rew = self.rew_dist_scaled + self.rew_dist_approach_scaled + self.rew_head_scaled + self.rew_time
-            rew = self.rew_dist_approach_scaled + self.rew_head_approach_scaled + self.rew_time
+            rew = self.rew_head_scaled + self.rew_head_approach_scaled + self.rew_dist_scaled + self.rew_dist_approach_scaled + self.rew_time
 
             # print to user:
             if self.render_mode == "human":
