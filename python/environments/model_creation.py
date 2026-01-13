@@ -20,12 +20,8 @@ class MakeEnv:
         """ 
         this is the constructor for the class, which does the instantiation of the environment.
 
-        Args:
-            params:     a dict that contains the relevant parameters for creating the environment,
-                        such as the: ``env_settings``, ``compiler_settings``, ``option_settings``,
-                        ``default_settings``, ``visual_settings``, ``skybox_settings``, ``light_settings``,
-                        ``camera_settings``, ``wall_settings``, ``ground_plane_settings``, ``agent_settings``, 
-                        and the ``task_settings``.      
+        :param params: a dict that contains the relevant parameters for creating the environment.
+        :type params: dict
 
         """
         # add params to self:
@@ -117,26 +113,17 @@ class MakeEnv:
         self.footprint_conaffinity = params["agent_footprint_settings"]["conaffinity"]
         self.footprint_rgba = params["agent_footprint_settings"]["rgba"]
 
-        # # agent settings:
-        # self.agent_name = params["agent_settings"]["name"]
-        # self.agent_radius = params["agent_settings"]["radius"]
-        # self.agent_height = params["agent_settings"]["height"]
-        # self.agent_contype = params["agent_settings"]["contype"]
-        # self.agent_conaffinity = params["agent_settings"]["conaffinity"]
-        # self.agent_rgba = params["agent_settings"]["rgba"]
-
         # obstacle settings:
+        self.obstacle_counter = 0
+        self.obstacle_footprint_size = params["obstacle_settings"]["footprint_size"]
+        self.obstacle_thickness = params["obstacle_settings"]["thickness"]
+        self.obstacle_height = params["obstacle_settings"]["height"]
         self.obstacle_size_low = params["obstacle_settings"]["size_low"]
         self.obstacle_size_high = params["obstacle_settings"]["size_high"]
-        self.obstacle_height = params["obstacle_settings"]["height"]
-        self.obstacle_bound = self.ground_internal_length - self.obstacle_size_high
 
         # task settings:
         self.task_radius = params["task_settings"]["radius"]
         self.task_height = params["task_settings"]["height"]
-
-        # obstacle settings:
-        self.obstacle_counter = 0
 
     # function for initializing the MjSpec:
     def make_spec(self):
@@ -226,20 +213,22 @@ class MakeEnv:
     # function for adding in an agent:
     def add_agent(self, agent_pos: list):
         """ 
-        this function spawns an agent in the environment. it takes in the position of the agent, and uses the agent specific 
-        parameters that are contained within the parameters file to create the agent. this agent is based on the 3rd revision done
-        by Minh, and as such does not contain any actuators or nesting of bodies. 
+        this function spawns an agent in the environment, taking in the position of the agent, and uses the agent specific parameters
+        from the params dict to create the agent.
 
-        Args:
-            agent_pos:      a list containing the position of the agent, in format ``[X, Y, Z]``
-        
+        :param agent_pos: a list containing the position of the agent, in format ``[X, Y, Z]``.
+        :type agent_pos: list
+
         """
-        # NEW FORMULATION:
+        # add agent to the worldbody:
         self.agent = self.spec.worldbody.add_body(name = self.agent_name, pos = agent_pos)
+
+        # add joints to the agent such that it can translate/rotate:
         self.agent.add_joint(name = "agent_x_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [1, 0, 0])
         self.agent.add_joint(name = "agent_y_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [0, 1, 0])
         self.agent.add_joint(name = "agent_z_yaw", type = mj.mjtJoint.mjJNT_HINGE, axis = [0, 0, 1])
 
+        # add the geom to the agent, so that it may be visualized:
         self.agent.add_geom(name = self.mesh_name,
                             type = mj.mjtGeom.mjGEOM_MESH, 
                             meshname = self.mesh_name,
@@ -249,6 +238,7 @@ class MakeEnv:
                             pos = self.mesh_pos
                             )
         
+        # add a footprint to the agent:
         self.agent_footprint = self.agent.add_body(name = self.footprint_name)
         self.agent_footprint.add_geom(name = self.footprint_name, 
                                     type = mj.mjtGeom.mjGEOM_CYLINDER,
@@ -257,25 +247,17 @@ class MakeEnv:
                                     conaffinity = self.footprint_conaffinity,
                                     rgba = self.footprint_rgba)
 
-        # self.agent.add_geom(name = "agent_body", 
-        #                     type = mj.mjtGeom.mjGEOM_CYLINDER, 
-        #                     size = [self.agent_radius, self.agent_height, 0], 
-        #                     contype = self.agent_contype, 
-        #                     conaffinity = self.agent_conaffinity, 
-        #                     rgba = self.agent_rgba)
-
     # function for adding the lidar:
     def add_lidar(self, n_rays: int):
         """ 
-        this function takes in a desired number of rays and uses it to calculate an angular resolution for placing
-        that many rays. it does this by looping over the desired number of rays, and placing a site for every angular
-        increment. it then binds a rangefinder to this site, before looping over n_rays.
+        this function takes in a desired number of rays and uses it to place sensor sites, incremented by an angular resolution that will
+        achieve the desired number of rays. it loops over the number of sites and binds a rangefinder to each one. 
 
-        for instance, n_rays of 10 would mean that there are 36 equally spaced sites + rangefinders around the agent
+        for instance, if ``n_rays`` is 10, there would be 36 equally spaced sites + rangefinders around the agent.
 
-        Args:
-            n_rays:     an int representing the desired number of LiDAR rangefinder rays
-        
+        :param n_rays: an int representing the desired number of LiDAR rangefinder rays
+        :type agent_pos: int
+
         """
         # add resolution to class:
         self.n_rays = n_rays
@@ -295,49 +277,288 @@ class MakeEnv:
     # function for adding in a task:
     def add_task(self, task_pos: list):
         """
-        this function spawns a task in the environment based on provided position.
+        this function spawns a goal in the environment based on provided position.
 
-        Args:
-            task_pos:       a list containing the position of the task, in format ``[X, Y, Z]``
-        
+        :param task_pos: a list containing the position of the task, in format ``[X, Y, Z]``.
+        :type task_pos:  list
+
         """
+        # add the task to the worldbody:
         task = self.spec.worldbody.add_body(name = "goal", pos = task_pos)
+
+        # add a geom to the task:
         task.add_geom(name = "goal", type = mj.mjtGeom.mjGEOM_CYLINDER, size = [self.task_radius, self.task_height, 0.0], contype = 0, conaffinity = 0, rgba = [0, 1, 0, 1])
+        
+        # add joints to the task:
         task.add_joint(name = "goal_x_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [1, 0, 0])
         task.add_joint(name = "goal_y_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [0, 1, 0])
 
-    # function for adding obstacles:
+    # # function for generating obstacle points for composite obstacles:
+    # def generate_segment_positions(self, segment_length_range: list):
+    #     """
+    #     this function generates various wall types within the environment. the shapes that it generates include
+    #     straight walls, L-shaped walls, T-shaped walls, and "plus"-shaped walls.
+
+    #     :param segment_length_range: a list containing the range of desired wall lengths
+    #     :type segment_length_range: list
+    
+    #     """
+    #     # define a list of obstacle types:
+    #     obstacle_types = ["corner", "tee", "plus"]
+
+    #     # sample a random obstacle type:
+    #     obstacle_type = np.random.choice(obstacle_types)
+    #     # print(f"obstacle is a : {obstacle_type}")
+
+    #     # define an empty list for holding the segments of the obstacle:
+    #     segments = []
+
+    #     # while the obstacle has not yet been generated, attempt to generate the obstacle:
+    #     # define the center, or origin, of the obstacle:
+    #     center = np.array([0, 0])
+
+    #     # sample an angle for the main direction of the obstacle:
+    #     initial_angle = 0.0
+
+    #     # define a list for holding the coordinate points of the obstacle, initialized with the center:
+    #     points = [center.copy()]
+
+    #     # define an empty list for holding the angles:
+    #     angles = []
+
+    #     # match cases for each obstacle type:
+    #     match obstacle_type:
+    #         # straight wall case:
+    #         case "straight":
+    #             # sample two lengths:
+    #             length = np.random.uniform(*segment_length_range, size = 2)
+
+    #             # need to move one length in each direction from the center point:
+    #             for direction, length in zip([-1, 1], length):
+    #                 # compute the next point:
+    #                 p_new = center + length * direction * np.array([np.cos(initial_angle), np.sin(initial_angle)])
+
+    #                 # append:
+    #                 points.append(p_new.copy())
+    #                 angles.append(initial_angle)
+            
+    #         # 90 degree corner case:
+    #         case "corner":
+    #             # sample two lengths:
+    #             length = np.random.uniform(*segment_length_range, size = 2)
+
+    #             # for every angle and length combination:
+    #             for i, l in enumerate(length):
+    #                 # compute the angle:
+    #                 angle = initial_angle + i * (np.pi/2)
+
+    #                 # compute the next point:
+    #                 p_new = center + l *np.array([np.cos(angle), np.sin(angle)])
+
+    #                 # append:
+    #                 points.append(p_new.copy())
+    #                 angles.append(angle)
+                    
+    #         # tee shaped case:
+    #         case "tee":
+    #             # sample three lengths:
+    #             length = np.random.uniform(*segment_length_range, size = 3)
+
+    #             # for every angle and length combination:
+    #             for i, l in enumerate(length):
+    #                 # compute the new angle:
+    #                 angle = initial_angle + i * (np.pi/2)
+
+    #                 # compute the next point:
+    #                 p_new = center + l * np.array([np.cos(angle), np.sin(angle)])
+
+    #                 # append:
+    #                 points.append(p_new.copy())
+    #                 angles.append(angle)
+
+    #         # plus shaped case:
+    #         case "plus": 
+    #             # sample four lengths:
+    #             length = np.random.uniform(*segment_length_range, size = 4)
+
+    #             # for every angle and length combination:
+    #             for i, l in enumerate(length):
+    #                 # compute the angle:
+    #                 angle = initial_angle + i * (np.pi/2)
+
+    #                 # compute the next point:
+    #                 p_new = center + l * np.array([np.cos(angle), np.sin(angle)])
+
+    #                 # append:
+    #                 points.append(p_new.copy())
+    #                 angles.append(angle)
+
+    #     # order them as segment pairs:
+    #     for i in range(len(points) - 1):
+    #         segments.append([points[0], points[i+1], angles[i]])
+
+    #     # return to user:
+    #     return segments, points, length
+
+    # function for adding in primitive obstacles:
     def add_primitive_obstacle(self, obs_pos: list):
         """
-        this function spawns an obstacle in the environment based on a provided position
+        this function generates a simple, primitive obstacle, either a box or a cylinder.
 
-        Args:
-            obs_pos:        a list containing the position of the obstacle, in format ``[X, Y]``
+        :param obs_pos: a list containing the ``[X, Y, Z]`` position of the obstacle.
+        :type obs_pos: list
+
         """
+        # increment the obstacle counter:
+        self.obstacle_counter += 1
+
+        # add the obstacle to the worldbody: 
+        self.obstacle = self.spec.worldbody.add_body(name = f"obstacle_{self.obstacle_counter}", pos = obs_pos)
+
         # randomly select a primitive shape:
-        self.geom_type = np.random.choice([mj.mjtGeom.mjGEOM_CYLINDER, mj.mjtGeom.mjGEOM_BOX])
+        geom_type = np.random.choice([mj.mjtGeom.mjGEOM_CYLINDER, mj.mjtGeom.mjGEOM_BOX])
 
-        # randomly select the size of the shape
-        match self.geom_type:
+        # random pose of obstacle:
+        obstacle_angle = [0, 0, np.random.choice([-90, 0, 90])]
+
+        ################################################# MAIN BODY #################################################
+        # match case for type because sizes differ:
+        match geom_type:
             case mj.mjtGeom.mjGEOM_CYLINDER:
-                obstacle_size = np.array([np.random.uniform(low=self.obstacle_size_low, high=self.obstacle_size_high), self.obstacle_height, 0.0])
-            case mj.mjtGeom.mjGEOM_BOX:
-                obstacle_size = np.append(np.random.uniform(self.obstacle_size_low, self.obstacle_size_high, size=2), self.obstacle_height)
+                obstacle_size = np.array([np.random.uniform(low = self.obstacle_size_low, high = self.obstacle_size_high), self.obstacle_height, 0.0])
+                footprint_size = obstacle_size.copy()
+                footprint_size[0] += self.obstacle_thickness / 2
+                footprint_size[1] = self.footprint_height
 
-        self.obstacle = self.spec.worldbody.add_body(name = f"obstacle_{self.obstacle_counter}", pos = np.append(obs_pos, self.obstacle_height))
+            case mj.mjtGeom.mjGEOM_BOX:
+                box_side_length = np.random.uniform(low = self.obstacle_size_low, high = self.obstacle_size_high)
+                obstacle_size = np.array([box_side_length, box_side_length, self.obstacle_height])
+                footprint_size = obstacle_size.copy()
+                footprint_size[0:2] += self.obstacle_thickness / 2
+                footprint_size[2] = self.footprint_height
+
+        # add joints to the obstacle:
         self.obstacle.add_joint(name = f"obstacle_{self.obstacle_counter}_x_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [1, 0, 0])
         self.obstacle.add_joint(name = f"obstacle_{self.obstacle_counter}_y_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [0, 1, 0])
 
         # add that shape to the environment:
         self.obstacle.add_geom(name = f"obstacle_{self.obstacle_counter}_geom",
-                               type = self.geom_type,
+                               type = geom_type,
                                size = obstacle_size,
+                               euler = obstacle_angle,
                                contype = 1,
                                conaffinity = 1,
                                rgba = [0, 0, 1, 1])
         
-        # increment the obstacle counter:
-        self.obstacle_counter += 1
+        ################################################# FOOTPRINT #################################################
+        # add footprint to obstacle body:
+        footprint = self.obstacle.add_body(name = f"footprint_{self.obstacle_counter}", pos = [0, 0, self.footprint_height])
+
+        # add dilated geom:
+        footprint.add_geom(name = f"obstacle_{self.obstacle_counter}_footprint_geom",
+            type = geom_type,
+            size = footprint_size,
+            euler = obstacle_angle,
+            contype = 1, 
+            conaffinity = 1,
+            rgba = [1, 0, 0, 0.1]
+        )
+
+    # # function for adding in composite obstacles:
+    # def add_composite_obstacle(self, obs_pos: list):
+    #     """
+    #     this function spawns an obstacle in the environment based on a provided position
+
+    #     Args:
+    #         obs_pos:        a list containing the position of the obstacle, in format ``[X, Y, Z]``
+
+    #     """           
+    #     # increment obstacle counter:
+    #     self.obstacle_counter += 1
+        
+    #     # add the obstacle to the worldbody:
+    #     self.obstacle = self.spec.worldbody.add_body(name = f"obstacle_{self.obstacle_counter}", pos = [obs_pos[0], obs_pos[1], 0])
+        
+    #     # get the segment pairs of the composite obstacle:
+    #     segments, _, length = self.generate_segment_positions(segment_length_range = [0.10, 0.35])
+
+    #     ################################################# MAIN BODY #################################################
+    #     # need to place a geom at the center of the segments, spanning the distance covered by the segment:
+    #     for i, (p0, p1, angle) in enumerate(segments):
+    #         # get difference in x and y:
+    #         dx = p1[0] - p0[0]
+    #         dy = p1[1] - p0[1]
+
+    #         # get length of segment:
+    #         length = np.hypot(dx, dy)
+
+    #         # find midpoints:
+    #         mid_x = 0.5 * (p0[0] + p1[0])
+    #         mid_y = 0.5 * (p0[1] + p1[1])
+
+    #         # add the box:
+    #         self.obstacle.add_geom(
+    #             name = f"obstacle_{self.obstacle_counter}_geom_{i + 1}",
+    #             type = mj.mjtGeom.mjGEOM_BOX,
+    #             pos = [mid_x, mid_y, self.obstacle_height],
+    #             size = [length / 2, self.obstacle_thickness/2, self.obstacle_height],
+    #             euler = [0, 0, np.rad2deg(angle)],
+    #             contype = 1,
+    #             conaffinity = 1,
+    #             rgba = [0, 0, 1, 1]
+    #         )
+
+    #     # add center piece because I am lazy:
+    #     self.obstacle.add_geom(
+    #         name = f"obstacle_{self.obstacle_counter}_center_geom",
+    #         type = mj.mjtGeom.mjGEOM_BOX,
+    #         pos = [-self.obstacle_thickness/4, -self.obstacle_thickness/4, self.obstacle_height],
+    #         size = [self.obstacle_thickness/4, self.obstacle_thickness/4, self.obstacle_height],
+    #         euler = [0, 0, np.rad2deg(angle)],
+    #         contype = 1, 
+    #         conaffinity = 1,
+    #         rgba = [0, 0, 1, 1]
+    #     )
+
+    #     ################################################# FOOTPRINT #################################################
+    #     footprint = self.obstacle.add_body(name = f"footprint_{self.obstacle_counter}", pos = [0, 0, 0])
+            
+    #     # dilation:
+    #     for i, (p0, p1, angle) in enumerate(segments):
+    #         # get difference in x and y:
+    #         dx = p1[0] - p0[0]
+    #         dy = p1[1] - p0[1]
+
+    #         # get length of segment:
+    #         length = np.hypot(dx, dy) + self.obstacle_thickness
+
+    #         # find midpoints:
+    #         mid_x = 0.5 * (p0[0] + p1[0])
+    #         mid_y = 0.5 * (p0[1] + p1[1])
+
+    #         # add the box:
+    #         footprint.add_geom(
+    #             name = f"obstacle_{self.obstacle_counter}_footprint_geom_{i + 1}",
+    #             type = mj.mjtGeom.mjGEOM_BOX,
+    #             pos = [mid_x, mid_y, self.footprint_height],
+    #             size = [length / 2, self.obstacle_thickness, self.footprint_height],
+    #             euler = [0, 0, np.rad2deg(angle)],
+    #             contype = 1,
+    #             conaffinity = 1,
+    #             rgba = [1, 0, 0, 0.1]
+    #         )
+
+    #     # add a center footprint because I am lazy:
+    #     footprint.add_geom(
+    #         name = f"obstacle_{self.obstacle_counter}_footprint_center_geom",
+    #         type = mj.mjtGeom.mjGEOM_BOX,
+    #         pos = [0, 0, 0],
+    #         size = [self.obstacle_thickness, self.obstacle_thickness, self.footprint_height],
+    #         euler = [0, 0, np.rad2deg(angle)],
+    #         contype = 1, 
+    #         conaffinity = 1,
+    #         rgba = [1, 0, 0, 0.1]
+    #     )
 
     # function for compiling the model:
     def compile(self):
@@ -346,6 +567,7 @@ class MakeEnv:
         such that it can be used in a broader MuJoCo simulation context.
 
         """
+        # compile the spec into a model:
         self.model = self.spec.compile()
 
     # not sure if a recompile function is needed, that is the rationale behind splitting up make_spec and compile
@@ -355,19 +577,21 @@ class MakeEnv:
                  agent_pos: list, 
                  task_pos: list, 
                  n_rays: int, 
-                 n_obstacles: int = 0, 
                  obs_pos : list | None = None):
         """ 
         this function uses the methods defined above and basically just chains them together to make and compile the environment.
         it is responsible for making the ``spec`` and applying the default settings (options, visual, lighting, camera, skybox, plane, walls),
-        adding in the agent, adding in the LiDAR, adding the task, and then compiling the ``spec`` into a usable ``model``.
+        adding in the agent, LiDAR, obstacles, and task, and then compiling the ``spec`` into a usable ``model``.
 
-        Args:
-            agent_pos:          a list containing the position of the robot, in format ``[X, Y]``
-            task_pos:           a list containing the position of the task, in format ``[X, Y]``
-            n_rays:             an int specifying the desired number of rays for the LiDAR simulation
-            n_obstacles:        number of obstacles
-            obs_pos:            a list containing the position of the obstacles, in format ``n_obstacles x [X, Y]``
+        :param agent_pos:   a list containing the position of the agent, in format ``[X, Y]``.
+        :param task_pos:    a list containing the position of the task, in format ``[X, Y]``.
+        :param n_rays:      an int specifying the desired number of rays for the simulated LiDAR.
+        :param obs_pos:     a list containing the position of the obstacles, in format ``[[X1, Y1], [X2, Y2], ...]``
+        
+        :type agent_pos: list
+        :type task_pos: list
+        :type n_rays: int
+        :type obs_pos: list
         """
         # verify that the provided agent position is feasible:
         if abs(agent_pos[0]) + self.footprint_radius > self.ground_internal_length or abs(agent_pos[1]) + self.footprint_radius > self.ground_internal_length:
@@ -377,8 +601,6 @@ class MakeEnv:
         if abs(task_pos[0]) + self.footprint_radius > self.ground_internal_length or abs(task_pos[1]) + self.footprint_radius > self.ground_internal_length:
             raise ValueError("Provided position of the task is unreachable by the agent!")
         
-        # NEED TO CHECK THAT THE OBSTACLE POSITION IS FEASIBLE HERE:
-
         # initialize the spec:
         self.make_spec()
 
@@ -389,13 +611,15 @@ class MakeEnv:
         self.add_lidar(n_rays)
 
         # add the task:
-        # self.add_task(task_pos = [task_pos[0], task_pos[1], self.task_height])
-        self.add_task(task_pos = [task_pos[0], task_pos[1], 0.16])
-
+        self.add_task(task_pos = [task_pos[0], task_pos[1], self.task_height])
 
         # add obstacles:
+        n_obstacles = len(obs_pos)
+
+        # for every obstacle:
         for i in range(n_obstacles):
-            self.add_primitive_obstacle(obs_pos = obs_pos[i])
+            # add a primitive obstacle:
+            self.add_primitive_obstacle(obs_pos = [obs_pos[i][0], obs_pos[i][1], self.obstacle_height])
 
         # compile into model:
         self.compile()
@@ -406,7 +630,7 @@ class MakeEnv:
         this function renders and steps through the environment every timestep. it takes the compiled model and extracts
         the data struct, which contains the simulation states. it then launches a viewer using the model and the data.
 
-        The settings that are altered are:
+        the settings that are altered are:
             viewer.cam.type:                this specifies the type of camera that is used
             viewer.cam.fixedcamid:          this specifies the ID of the user-defined camera
             viewer.opt.frame:               this specifies which frame(s) to have active
