@@ -106,16 +106,16 @@ class MakeEnv:
         self.mesh_pos = params["agent_mesh_settings"]["pos"]
 
         # agent footprint settings:
-        self.footprint_name = params["agent_footprint_settings"]["name"]
-        self.footprint_radius = params["agent_footprint_settings"]["radius"]
+        self.agent_footprint_name = params["agent_footprint_settings"]["name"]
+        self.agent_footprint_radius = params["agent_footprint_settings"]["radius"]
         self.footprint_height = params["agent_footprint_settings"]["height"]
-        self.footprint_contype = params["agent_footprint_settings"]["contype"]
-        self.footprint_conaffinity = params["agent_footprint_settings"]["conaffinity"]
+        self.agent_footprint_contype = params["agent_footprint_settings"]["contype"]
+        self.agent_footprint_conaffinity = params["agent_footprint_settings"]["conaffinity"]
         self.footprint_rgba = params["agent_footprint_settings"]["rgba"]
 
         # obstacle settings:
         self.obstacle_counter = 0
-        self.obstacle_footprint_size = params["obstacle_settings"]["footprint_size"]
+        self.allowance = params["obstacle_settings"]["allowance"]
         self.obstacle_thickness = params["obstacle_settings"]["thickness"]
         self.obstacle_height = params["obstacle_settings"]["height"]
         self.obstacle_size_low = params["obstacle_settings"]["size_low"]
@@ -239,12 +239,12 @@ class MakeEnv:
                             )
         
         # add a footprint to the agent:
-        self.agent_footprint = self.agent.add_body(name = self.footprint_name)
-        self.agent_footprint.add_geom(name = self.footprint_name, 
+        self.agent_footprint = self.agent.add_body(name = self.agent_footprint_name)
+        self.agent_footprint.add_geom(name = self.agent_footprint_name, 
                                     type = mj.mjtGeom.mjGEOM_CYLINDER,
-                                    size = [self.footprint_radius, self.footprint_height, 0], 
-                                    contype = self.footprint_contype,
-                                    conaffinity = self.footprint_conaffinity,
+                                    size = [self.agent_footprint_radius, self.footprint_height, 0], 
+                                    contype = self.agent_footprint_contype,
+                                    conaffinity = self.agent_footprint_conaffinity,
                                     rgba = self.footprint_rgba)
 
     # function for adding the lidar:
@@ -293,113 +293,6 @@ class MakeEnv:
         task.add_joint(name = "goal_x_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [1, 0, 0])
         task.add_joint(name = "goal_y_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [0, 1, 0])
 
-    # # function for generating obstacle points for composite obstacles:
-    # def generate_segment_positions(self, segment_length_range: list):
-    #     """
-    #     this function generates various wall types within the environment. the shapes that it generates include
-    #     straight walls, L-shaped walls, T-shaped walls, and "plus"-shaped walls.
-
-    #     :param segment_length_range: a list containing the range of desired wall lengths
-    #     :type segment_length_range: list
-    
-    #     """
-    #     # define a list of obstacle types:
-    #     obstacle_types = ["corner", "tee", "plus"]
-
-    #     # sample a random obstacle type:
-    #     obstacle_type = np.random.choice(obstacle_types)
-    #     # print(f"obstacle is a : {obstacle_type}")
-
-    #     # define an empty list for holding the segments of the obstacle:
-    #     segments = []
-
-    #     # while the obstacle has not yet been generated, attempt to generate the obstacle:
-    #     # define the center, or origin, of the obstacle:
-    #     center = np.array([0, 0])
-
-    #     # sample an angle for the main direction of the obstacle:
-    #     initial_angle = 0.0
-
-    #     # define a list for holding the coordinate points of the obstacle, initialized with the center:
-    #     points = [center.copy()]
-
-    #     # define an empty list for holding the angles:
-    #     angles = []
-
-    #     # match cases for each obstacle type:
-    #     match obstacle_type:
-    #         # straight wall case:
-    #         case "straight":
-    #             # sample two lengths:
-    #             length = np.random.uniform(*segment_length_range, size = 2)
-
-    #             # need to move one length in each direction from the center point:
-    #             for direction, length in zip([-1, 1], length):
-    #                 # compute the next point:
-    #                 p_new = center + length * direction * np.array([np.cos(initial_angle), np.sin(initial_angle)])
-
-    #                 # append:
-    #                 points.append(p_new.copy())
-    #                 angles.append(initial_angle)
-            
-    #         # 90 degree corner case:
-    #         case "corner":
-    #             # sample two lengths:
-    #             length = np.random.uniform(*segment_length_range, size = 2)
-
-    #             # for every angle and length combination:
-    #             for i, l in enumerate(length):
-    #                 # compute the angle:
-    #                 angle = initial_angle + i * (np.pi/2)
-
-    #                 # compute the next point:
-    #                 p_new = center + l *np.array([np.cos(angle), np.sin(angle)])
-
-    #                 # append:
-    #                 points.append(p_new.copy())
-    #                 angles.append(angle)
-                    
-    #         # tee shaped case:
-    #         case "tee":
-    #             # sample three lengths:
-    #             length = np.random.uniform(*segment_length_range, size = 3)
-
-    #             # for every angle and length combination:
-    #             for i, l in enumerate(length):
-    #                 # compute the new angle:
-    #                 angle = initial_angle + i * (np.pi/2)
-
-    #                 # compute the next point:
-    #                 p_new = center + l * np.array([np.cos(angle), np.sin(angle)])
-
-    #                 # append:
-    #                 points.append(p_new.copy())
-    #                 angles.append(angle)
-
-    #         # plus shaped case:
-    #         case "plus": 
-    #             # sample four lengths:
-    #             length = np.random.uniform(*segment_length_range, size = 4)
-
-    #             # for every angle and length combination:
-    #             for i, l in enumerate(length):
-    #                 # compute the angle:
-    #                 angle = initial_angle + i * (np.pi/2)
-
-    #                 # compute the next point:
-    #                 p_new = center + l * np.array([np.cos(angle), np.sin(angle)])
-
-    #                 # append:
-    #                 points.append(p_new.copy())
-    #                 angles.append(angle)
-
-    #     # order them as segment pairs:
-    #     for i in range(len(points) - 1):
-    #         segments.append([points[0], points[i+1], angles[i]])
-
-    #     # return to user:
-    #     return segments, points, length
-
     # function for adding in primitive obstacles:
     def add_primitive_obstacle(self, obs_pos: list):
         """
@@ -427,14 +320,14 @@ class MakeEnv:
             case mj.mjtGeom.mjGEOM_CYLINDER:
                 obstacle_size = np.array([np.random.uniform(low = self.obstacle_size_low, high = self.obstacle_size_high), self.obstacle_height, 0.0])
                 footprint_size = obstacle_size.copy()
-                footprint_size[0] += self.obstacle_thickness * 2
+                footprint_size[0] += self.allowance
                 footprint_size[1] = self.footprint_height
 
             case mj.mjtGeom.mjGEOM_BOX:
                 box_side_length = np.random.uniform(low = self.obstacle_size_low, high = self.obstacle_size_high)
                 obstacle_size = np.array([box_side_length, box_side_length, self.obstacle_height])
                 footprint_size = obstacle_size.copy()
-                footprint_size[0:2] += self.obstacle_thickness * 2
+                footprint_size[0:2] += self.allowance
                 footprint_size[2] = self.footprint_height
 
         # add joints to the obstacle:
@@ -464,102 +357,6 @@ class MakeEnv:
             conaffinity = 1,
             rgba = [1, 0, 0, 0.1]
         )
-
-    # # function for adding in composite obstacles:
-    # def add_composite_obstacle(self, obs_pos: list):
-    #     """
-    #     this function spawns an obstacle in the environment based on a provided position
-
-    #     Args:
-    #         obs_pos:        a list containing the position of the obstacle, in format ``[X, Y, Z]``
-
-    #     """           
-    #     # increment obstacle counter:
-    #     self.obstacle_counter += 1
-        
-    #     # add the obstacle to the worldbody:
-    #     self.obstacle = self.spec.worldbody.add_body(name = f"obstacle_{self.obstacle_counter}", pos = [obs_pos[0], obs_pos[1], 0])
-        
-    #     # get the segment pairs of the composite obstacle:
-    #     segments, _, length = self.generate_segment_positions(segment_length_range = [0.10, 0.35])
-
-    #     ################################################# MAIN BODY #################################################
-    #     # need to place a geom at the center of the segments, spanning the distance covered by the segment:
-    #     for i, (p0, p1, angle) in enumerate(segments):
-    #         # get difference in x and y:
-    #         dx = p1[0] - p0[0]
-    #         dy = p1[1] - p0[1]
-
-    #         # get length of segment:
-    #         length = np.hypot(dx, dy)
-
-    #         # find midpoints:
-    #         mid_x = 0.5 * (p0[0] + p1[0])
-    #         mid_y = 0.5 * (p0[1] + p1[1])
-
-    #         # add the box:
-    #         self.obstacle.add_geom(
-    #             name = f"obstacle_{self.obstacle_counter}_geom_{i + 1}",
-    #             type = mj.mjtGeom.mjGEOM_BOX,
-    #             pos = [mid_x, mid_y, self.obstacle_height],
-    #             size = [length / 2, self.obstacle_thickness/2, self.obstacle_height],
-    #             euler = [0, 0, np.rad2deg(angle)],
-    #             contype = 1,
-    #             conaffinity = 1,
-    #             rgba = [0, 0, 1, 1]
-    #         )
-
-    #     # add center piece because I am lazy:
-    #     self.obstacle.add_geom(
-    #         name = f"obstacle_{self.obstacle_counter}_center_geom",
-    #         type = mj.mjtGeom.mjGEOM_BOX,
-    #         pos = [-self.obstacle_thickness/4, -self.obstacle_thickness/4, self.obstacle_height],
-    #         size = [self.obstacle_thickness/4, self.obstacle_thickness/4, self.obstacle_height],
-    #         euler = [0, 0, np.rad2deg(angle)],
-    #         contype = 1, 
-    #         conaffinity = 1,
-    #         rgba = [0, 0, 1, 1]
-    #     )
-
-    #     ################################################# FOOTPRINT #################################################
-    #     footprint = self.obstacle.add_body(name = f"footprint_{self.obstacle_counter}", pos = [0, 0, 0])
-            
-    #     # dilation:
-    #     for i, (p0, p1, angle) in enumerate(segments):
-    #         # get difference in x and y:
-    #         dx = p1[0] - p0[0]
-    #         dy = p1[1] - p0[1]
-
-    #         # get length of segment:
-    #         length = np.hypot(dx, dy) + self.obstacle_thickness
-
-    #         # find midpoints:
-    #         mid_x = 0.5 * (p0[0] + p1[0])
-    #         mid_y = 0.5 * (p0[1] + p1[1])
-
-    #         # add the box:
-    #         footprint.add_geom(
-    #             name = f"obstacle_{self.obstacle_counter}_footprint_geom_{i + 1}",
-    #             type = mj.mjtGeom.mjGEOM_BOX,
-    #             pos = [mid_x, mid_y, self.footprint_height],
-    #             size = [length / 2, self.obstacle_thickness, self.footprint_height],
-    #             euler = [0, 0, np.rad2deg(angle)],
-    #             contype = 1,
-    #             conaffinity = 1,
-    #             rgba = [1, 0, 0, 0.1]
-    #         )
-
-    #     # add a center footprint because I am lazy:
-    #     footprint.add_geom(
-    #         name = f"obstacle_{self.obstacle_counter}_footprint_center_geom",
-    #         type = mj.mjtGeom.mjGEOM_BOX,
-    #         pos = [0, 0, 0],
-    #         size = [self.obstacle_thickness, self.obstacle_thickness, self.footprint_height],
-    #         euler = [0, 0, np.rad2deg(angle)],
-    #         contype = 1, 
-    #         conaffinity = 1,
-    #         rgba = [1, 0, 0, 0.1]
-    #     )
 
     # function for compiling the model:
     def compile(self):
@@ -595,11 +392,11 @@ class MakeEnv:
         :type obs_pos: list
         """
         # verify that the provided agent position is feasible:
-        if abs(agent_pos[0]) + self.footprint_radius > self.ground_internal_length or abs(agent_pos[1]) + self.footprint_radius > self.ground_internal_length:
+        if abs(agent_pos[0]) + self.agent_footprint_radius > self.ground_internal_length or abs(agent_pos[1]) + self.agent_footprint_radius > self.ground_internal_length:
             raise ValueError("Provided position of the agent is outside the internal area of the arena!")
         
         # verify that the provided task position is feasible:
-        if abs(task_pos[0]) + self.footprint_radius > self.ground_internal_length or abs(task_pos[1]) + self.footprint_radius > self.ground_internal_length:
+        if abs(task_pos[0]) + self.agent_footprint_radius > self.ground_internal_length or abs(task_pos[1]) + self.agent_footprint_radius > self.ground_internal_length:
             raise ValueError("Provided position of the task is unreachable by the agent!")
         
         # initialize the spec:
