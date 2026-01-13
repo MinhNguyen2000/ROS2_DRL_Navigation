@@ -90,9 +90,9 @@
     "obstacle_settings" : {
         "size_low": 0.05,
         "size_high": 0.1,
-        "footprint_size" : 0.25,
         "thickness" : 0.025,
-        "height": 0.1
+        "height": 0.1,
+        "allowance" : 0.05
     },
 
     "task_settings" : {
