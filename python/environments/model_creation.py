@@ -20,8 +20,9 @@ class MakeEnv:
         """ 
         this is the constructor for the class, which does the instantiation of the environment.
 
-        :param params: a dict that contains the relevant parameters for creating the environment.
-        :type params: dict
+        Arguments:
+            :param params: a dict that contains the relevant parameters for creating the environment.
+            :type params: dict
 
         """
         # add params to self:
@@ -216,8 +217,9 @@ class MakeEnv:
         this function spawns an agent in the environment, taking in the position of the agent, and uses the agent specific parameters
         from the params dict to create the agent.
 
-        :param agent_pos: a list containing the position of the agent, in format ``[X, Y, Z]``.
-        :type agent_pos: list
+        Arguments:
+            :param agent_pos: a list containing the position of the agent, in format ``[X, Y, Z]``.
+            :type agent_pos: list
 
         """
         # add agent to the worldbody:
@@ -255,8 +257,9 @@ class MakeEnv:
 
         for instance, if ``n_rays`` is 10, there would be 36 equally spaced sites + rangefinders around the agent.
 
-        :param n_rays: an int representing the desired number of LiDAR rangefinder rays
-        :type agent_pos: int
+        Arguments:
+            :param n_rays: an int representing the desired number of LiDAR rangefinder rays
+            :type agent_pos: int
 
         """
         # add resolution to class:
@@ -279,8 +282,9 @@ class MakeEnv:
         """
         this function spawns a goal in the environment based on provided position.
 
-        :param task_pos: a list containing the position of the task, in format ``[X, Y, Z]``.
-        :type task_pos:  list
+        Arguments:
+            :param task_pos: a list containing the position of the task, in format ``[X, Y, Z]``.
+            :type task_pos:  list
 
         """
         # add the task to the worldbody:
@@ -405,8 +409,9 @@ class MakeEnv:
         """
         this function generates a simple, primitive obstacle, either a box or a cylinder.
 
-        :param obs_pos: a list containing the ``[X, Y, Z]`` position of the obstacle.
-        :type obs_pos: list
+        Arguments:
+            :param obs_pos: a list containing the ``[X, Y, Z]`` position of the obstacle.
+            :type obs_pos: list
 
         """
         # increment the obstacle counter:
@@ -584,15 +589,16 @@ class MakeEnv:
         it is responsible for making the ``spec`` and applying the default settings (options, visual, lighting, camera, skybox, plane, walls),
         adding in the agent, LiDAR, obstacles, and task, and then compiling the ``spec`` into a usable ``model``.
 
-        :param agent_pos:   a list containing the position of the agent, in format ``[X, Y]``.
-        :param task_pos:    a list containing the position of the task, in format ``[X, Y]``.
-        :param n_rays:      an int specifying the desired number of rays for the simulated LiDAR.
-        :param obs_pos:     a list containing the position of the obstacles, in format ``[[X1, Y1], [X2, Y2], ...]``
-        
-        :type agent_pos: list
-        :type task_pos: list
-        :type n_rays: int
-        :type obs_pos: list
+        Arguments:
+            :param agent_pos:   a list containing the position of the agent, in format ``[X, Y]``.
+            :param task_pos:    a list containing the position of the task, in format ``[X, Y]``.
+            :param n_rays:      an int specifying the desired number of rays for the simulated LiDAR.
+            :param obs_pos:     a list containing the position of the obstacles, in format ``[[X1, Y1], [X2, Y2], ...]``
+            
+            :type agent_pos: list
+            :type task_pos: list
+            :type n_rays: int
+            :type obs_pos: list
         """
         # verify that the provided agent position is feasible:
         if abs(agent_pos[0]) + self.footprint_radius > self.ground_internal_length or abs(agent_pos[1]) + self.footprint_radius > self.ground_internal_length:
