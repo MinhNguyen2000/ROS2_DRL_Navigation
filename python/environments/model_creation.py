@@ -427,14 +427,14 @@ class MakeEnv:
             case mj.mjtGeom.mjGEOM_CYLINDER:
                 obstacle_size = np.array([np.random.uniform(low = self.obstacle_size_low, high = self.obstacle_size_high), self.obstacle_height, 0.0])
                 footprint_size = obstacle_size.copy()
-                footprint_size[0] += self.obstacle_thickness / 2
+                footprint_size[0] += self.obstacle_thickness * 2
                 footprint_size[1] = self.footprint_height
 
             case mj.mjtGeom.mjGEOM_BOX:
                 box_side_length = np.random.uniform(low = self.obstacle_size_low, high = self.obstacle_size_high)
                 obstacle_size = np.array([box_side_length, box_side_length, self.obstacle_height])
                 footprint_size = obstacle_size.copy()
-                footprint_size[0:2] += self.obstacle_thickness / 2
+                footprint_size[0:2] += self.obstacle_thickness * 2
                 footprint_size[2] = self.footprint_height
 
         # add joints to the obstacle:
@@ -458,6 +458,7 @@ class MakeEnv:
         footprint.add_geom(name = f"obstacle_{self.obstacle_counter}_footprint_geom",
             type = geom_type,
             size = footprint_size,
+            pos = [0, 0, -self.obstacle_height + self.footprint_height],
             euler = obstacle_angle,
             contype = 1, 
             conaffinity = 1,
