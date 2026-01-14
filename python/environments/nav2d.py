@@ -109,9 +109,10 @@ class Nav2D(MujocoEnv):
         # --- REWARD SCALE INITIALIZATION
         self.reward_scale_options       = reward_scale_options
         self.rew_dist_scale             = reward_scale_options.get("rew_dist_scale", 1)             if reward_scale_options else 1
-        self.rew_dist_approach_scale    = reward_scale_options.get("rew_dist_approach_scale", 250)  if reward_scale_options else 100
+        self.rew_dist_approach_scale    = reward_scale_options.get("rew_dist_approach_scale", 125)  if reward_scale_options else 125
         self.rew_head_scale             = reward_scale_options.get("rew_head_scale", 1)             if reward_scale_options else 1
-        self.rew_head_approach_scale    = reward_scale_options.get("rew_head_approach_scale", 250)  if reward_scale_options else 100
+        self.rew_obs_dist_scale         = reward_scale_options.get("rew_obs_dist_scale", 125)       if reward_scale_options else 125
+        self.rew_head_approach_scale    = reward_scale_options.get("rew_head_approach_scale", 125)  if reward_scale_options else 125
         self.rew_goal_scale             = reward_scale_options.get("rew_goal_scale", 5000)          if reward_scale_options else 5000
         self.rew_obst_scale             = reward_scale_options.get("rew_obst_scale", -1000)         if reward_scale_options else -1000
         self.rew_time                   = reward_scale_options.get("rew_time", -0.25)               if reward_scale_options else -0.25
@@ -423,6 +424,11 @@ class Nav2D(MujocoEnv):
         self.prev_abs_diff = abs(np.arctan2(s_bearing, c_bearing, dtype=np.float32))
         self.abs_diff_init = self.prev_abs_diff
 
+        # get the initial min_dist:
+        lidar_obs = ob[7:]
+        min_dist = min(lidar_obs)
+        self.min_dist_last = min_dist
+
         # reset the distance progress count
         self.dist_progress_count = 0
         self.head_progress_count = 0
@@ -507,8 +513,8 @@ class Nav2D(MujocoEnv):
         c_bearing, s_bearing    = nobs[5:7]
         lidar_obs               = nobs[7:]
 
-        # get the cartesian distance between the agent and the goal:
-        d_goal = d_goal
+        # get the minimum LiDAR reading:
+        min_dist = min(lidar_obs)
 
         # get the difference between the agents current heading, and the required heading:
         heading  = np.arctan2(s_theta, c_theta) % (2 * np.pi)
@@ -523,16 +529,16 @@ class Nav2D(MujocoEnv):
         obstacle_cond = np.min(lidar_obs) < self.obstacle_threshold
         
         # when the agent has not reduced the d_goal for N steps, where N is 200:
-        if d_goal > self.d_goal_last: 
-            self.dist_progress_count += 1
-        else:
-            self.dist_progress_count = 0
+        # if d_goal > self.d_goal_last: 
+        #     self.dist_progress_count += 1
+        # else:
+        #     self.dist_progress_count = 0
 
-        # when the abs_diff is more than 15 degrees and still growing:
-        if abs_diff >= self.prev_abs_diff and (abs_diff > np.deg2rad(15)):
-            self.head_progress_count += 1
-        else:
-            self.head_progress_count = 0
+        # # when the abs_diff is more than 15 degrees and still growing:
+        # if abs_diff >= self.prev_abs_diff and (abs_diff > np.deg2rad(15)):
+        #     self.head_progress_count += 1
+        # else:
+        #     self.head_progress_count = 0
         
         term = distance_cond or obstacle_cond 
         # or (self.dist_progress_count >= self.progress_threshold) or (self.head_progress_count >= self.progress_threshold)
@@ -586,8 +592,15 @@ class Nav2D(MujocoEnv):
             rew_head_approach = max((self.prev_abs_diff - abs_diff), 0)
             self.rew_head_approach_scaled = self.rew_head_approach_scale * rew_head_approach
 
+            #--- CHANGE IN MINIMUM OBSTACLE DISTANCE REWARD TERM:
+            rew_obs_dist_change = max((self.min_dist_last - min_dist), 0)
+            self.rew_obs_dist_change_scaled = self.rew_obs_dist_scale * rew_obs_dist_change
+            # min_dist = min(lidar_obs)
+            # rew_obs_dist = min_dist / self.dmax
+            # self.rew_obs_dist_scaled = 
+
             #--- TOTAL REWARD TERM:
-            rew = self.rew_head_scaled + self.rew_head_approach_scaled + self.rew_dist_scaled + self.rew_dist_approach_scaled + self.rew_time
+            rew = self.rew_head_scaled + self.rew_head_approach_scaled + self.rew_dist_scaled + self.rew_dist_approach_scaled + self.rew_time + self.rew_obs_dist_change_scaled
 
             # print to user:
             if self.render_mode == "human":
@@ -602,6 +615,7 @@ class Nav2D(MujocoEnv):
                       f"rew_dist: {self.rew_dist_scaled: 6.4f} | "
                       f"rew_dist_app: {self.rew_dist_approach_scaled: 6.4f} | "
                       f"rew_head: {self.rew_head_scaled: 6.4f} | "
+                      f"rew_obs_dist: {self.rew_obs_dist_change_scaled: 6.4f} |"
                       f"rew_head_app: {self.rew_head_approach_scaled: 6.4f}        ",
                       end="\r")
                 pass
@@ -609,6 +623,7 @@ class Nav2D(MujocoEnv):
         # advance histories:
         self.d_goal_last = d_goal
         self.prev_abs_diff = abs_diff
+        self.min_dist_last = min_dist
         
         # 5. info (optional):
         # info = {"reward": rew, "dist_cond": distance_cond, "obst_cond": obstacle_cond}
