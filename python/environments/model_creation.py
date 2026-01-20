@@ -66,6 +66,7 @@ class MakeEnv:
         self.light_diffuse = params["light_settings"]["diffuse"]
         self.light_specular = params["light_settings"]["specular"]
         self.light_ambient = params["light_settings"]["ambient"]
+        self.light_shadows = params["light_settings"]["castshadows"]
 
         # camera settings:
         self.camera_name = params["camera_settings"]["name"]
@@ -176,7 +177,8 @@ class MakeEnv:
                                  pos = self.light_pos, 
                                  diffuse = self.light_diffuse,
                                  specular = self.light_specular, 
-                                 ambient = self.light_ambient)
+                                 ambient = self.light_ambient,
+                                 castshadow = self.light_shadows)
         
         # add camera:
         self.spec.worldbody.add_camera(name = self.camera_name,
