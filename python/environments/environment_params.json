@@ -89,8 +89,8 @@
     },
 
     "obstacle_settings" : {
-        "size_low": 0.05,
-        "size_high": 0.1,
+        "size_low": 0.1,
+        "size_high": 0.25,
         "thickness" : 0.025,
         "height": 0.1,
         "allowance" : 0.05
