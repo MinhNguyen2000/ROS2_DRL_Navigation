@@ -32,19 +32,22 @@ warnings.filterwarnings("ignore", category=UserWarning)
 def init_model(hyperparameters : dict, 
                reward_scale : dict = {str, float},
                randomization_options : dict = {str, int},
+               obstacle_options : dict = {str, int},
                normalize : bool = False):
     # environment vectorization settings:
     n_proc = 24
 
     # max episode steps:
-    max_episode_steps = 2500
+    max_episode_steps = 5_000
 
     # make the vectorized environment:
     env = make_vec_env("Nav2D-v0",
                         n_envs = n_proc,
                         env_kwargs = {"max_episode_steps" : max_episode_steps,
                                      "reward_scale_options" : reward_scale,
-                                     "randomization_options" : randomization_options},
+                                     "randomization_options" : randomization_options,
+                                     "obstacle_options" : obstacle_options,
+                                     "render_mode" : "rgb_array"},
                         vec_env_cls = SubprocVecEnv,
                         vec_env_kwargs = dict(start_method = "forkserver"),
                         seed = 42)
@@ -198,9 +201,9 @@ def train_model(model,
     hyperparam_codified = f"{hyperparameters["policy_kwargs"]}_"
     hyperparam_codified += f"{hyperparameters["actor_lr"]}_{hyperparameters["critic_lr"]}_{hyperparameters["buffer_size"]}_{hyperparameters["batch_size"]}_{hyperparameters["tau"]}_{hyperparameters["gamma"]}_"
     hyperparam_codified += f"{hyperparameters["train_freq"]}_{hyperparameters["gradient_steps"]}_{hyperparameters["ent_coef"]}_{hyperparameters["target_update_interval"]}_{hyperparameters["target_entropy"]}_"
-    hyperparam_codified += f"{reward_scale['rew_head_scale']}_{reward_scale["rew_head_approach_scale"]}_{reward_scale['rew_dist_scale']}_{reward_scale['rew_dist_approach_scale']}_{reward_scale['rew_goal_scale']}_{reward_scale['rew_obst_scale']}_"
+    hyperparam_codified += f"{reward_scale['rew_head_scale']}_{reward_scale["rew_head_approach_scale"]}_{reward_scale["rew_obs_dist_scale"]}_{reward_scale['rew_dist_scale']}_{reward_scale['rew_dist_approach_scale']}_{reward_scale['rew_goal_scale']}_{reward_scale['rew_obst_scale']}_{reward_scale['rew_time']}_"
     # hyperparam_codified += f"{reward_scale['rew_head_scale']}_{reward_scale['rew_dist_scale']}_{reward_scale['rew_goal_scale']}_{reward_scale['rew_obst_scale']}_"
-    hyperparam_codified += f"{randomization_options['agent_freq']}_{randomization_options["goal_freq"]}_{randomization_options["obstacle_freq"]}"
+    hyperparam_codified += f"{randomization_options['randomization_freq']}"
 
     timestamp = datetime.now().strftime("%y%m%d_%H%M")
     hyperparam_codified_time = f"{timestamp}_" + hyperparam_codified
@@ -372,62 +375,63 @@ def main(do_studies : bool = False,
 
     # if not using optuna:
     if not do_studies:
-        # reward_scale:
-        for _ in range(5):
-            reward_scale = {
-                            "rew_dist_scale" : 2.0,               
-                            "rew_dist_approach_scale" : 25.0,
-                            "rew_head_scale" : 1.0,             
-                            "rew_head_approach_scale" : 25.0,   
-                            "rew_goal_scale" : 7_500,          
-                            "rew_obst_scale" : -2_000,        
-                            "rew_time" : -0.1}                 
-            
-            randomization_options = {"agent_freq" : 1,
-                            "goal_freq" : 1,
-                            "obstacle_freq" : 1}
-            
-            # model hyperparameters:
-            actor_arch = [256, 256]
-            critic_arch = [256, 256]
-            policy_kwargs = {"net_arch" : {"pi" : actor_arch, "qf" : critic_arch}}
+        # scales and options:
+        reward_scale = {
+                        "rew_dist_scale" : 0.0,               
+                        "rew_dist_approach_scale" : 150.0,
+                        "rew_head_scale" : 0.0,
+                        "rew_head_approach_scale" : 125.0,   
+                        "rew_goal_scale" : 1_000.0,          
+                        "rew_obst_scale" : -250.0,
+                        "rew_obs_dist_scale" : 125.0,        
+                        "rew_time" : -0.1}                 
+        
+        randomization_options = {"randomization_freq" : 1}
+        
+        obstacle_options = {"n_obstacles" : 10}
+        
+        # model hyperparameters:
+        actor_arch = [256, 256]
+        critic_arch = [256, 256]
+        policy_kwargs = {"net_arch" : {"pi" : actor_arch, "qf" : critic_arch}}
 
-            hyperparameters = {"policy" : "MlpPolicy",
-                            "actor_lr" : 3e-5,
-                            "critic_lr" : 3e-4,
-                            "buffer_size" : int(2.5e6),
-                            "learning_starts" : int(1e5),
-                            "batch_size" : 256,
-                            "tau" : 5e-3,
-                            "gamma" : 0.99,
-                            "train_freq" : 2,
-                            "target_update_interval" : 1,
-                            "gradient_steps" : 4,
-                            "ent_coef" : "auto",
-                            "target_entropy" : "auto",
-                            "action_noise" : None,
-                            "verbose" : 0, 
-                            "gpu" : True,
-                            "policy_kwargs": policy_kwargs,
-                            "tensorboard_log" : tensorboard_log_dir}
-            
-            # get the model and the environment:
-            env, model = init_model(hyperparameters = hyperparameters, 
-                                    reward_scale = reward_scale,
-                                    randomization_options = randomization_options,
-                                    normalize = normalize)
-            
-            # train the model:
-            _, _ = train_model(model = model, 
-                        env = env,
-                        dir_path = dir_path,
-                        reward_scale = reward_scale,
-                        randomization_options = randomization_options,
-                        hyperparameters = hyperparameters,
-                        number_of_runs = number_of_runs,
-                        steps_per_run = steps_per_run,
-                        normalize = normalize)
-            
+        hyperparameters = {"policy" : "MlpPolicy",
+                        "actor_lr" : 3e-5,
+                        "critic_lr" : 3e-4,
+                        "buffer_size" : int(2.0e6),
+                        "learning_starts" : int(1e5),
+                        "batch_size" : 256,
+                        "tau" : 5e-3,
+                        "gamma" : 0.99,
+                        "train_freq" : 4,
+                        "target_update_interval" : 1,
+                        "gradient_steps" : 4,
+                        "ent_coef" : "auto",
+                        "target_entropy" : "auto",
+                        "action_noise" : None,
+                        "verbose" : 0, 
+                        "gpu" : True,
+                        "policy_kwargs": policy_kwargs,
+                        "tensorboard_log" : tensorboard_log_dir}
+        
+        # get the model and the environment:
+        env, model = init_model(hyperparameters = hyperparameters, 
+                                reward_scale = reward_scale,
+                                randomization_options = randomization_options,
+                                obstacle_options = obstacle_options,
+                                normalize = normalize)
+        
+        # train the model:
+        _, _ = train_model(model = model, 
+                    env = env,
+                    dir_path = dir_path,
+                    reward_scale = reward_scale,
+                    randomization_options = randomization_options,
+                    hyperparameters = hyperparameters,
+                    number_of_runs = number_of_runs,
+                    steps_per_run = steps_per_run,
+                    normalize = normalize)
+        
     # if using optuna:
     else:
         # set the study parameters:
