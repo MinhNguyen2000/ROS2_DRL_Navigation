@@ -27,6 +27,7 @@ class Nav2D(MujocoEnv):
                  randomization_options: dict[str, float] | None = None,
                  obstacle_options: dict[str, int] = {"n_obstacles": 0},
                  visual_options: dict[int, bool] | None = None,
+                 n_ray_groups: int = 16,
                  is_eval: bool = False
                 ):
         ''' class constructor to initialize the environment (Mujoco model and data), the observation space, and renderer
@@ -57,7 +58,7 @@ class Nav2D(MujocoEnv):
         self.camera_id = camera_id
         self.frame_skip = frame_skip
         self.n_rays = 360
-        self.n_ray_groups = 8
+        self.n_ray_groups = n_ray_groups
         self._ray_per_group = int(self.n_rays/self.n_ray_groups)
 
         self.linear_scale = 2
