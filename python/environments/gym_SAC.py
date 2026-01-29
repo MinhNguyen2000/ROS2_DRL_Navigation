@@ -30,6 +30,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 # define initialization function:
 def init_model(hyperparameters : dict, 
+               n_ray_groups : int,
                reward_scale : dict = {str, float},
                randomization_options : dict = {str, int},
                obstacle_options : dict = {str, int},
@@ -38,7 +39,7 @@ def init_model(hyperparameters : dict,
     n_proc = 24
 
     # max episode steps:
-    max_episode_steps = 5_000
+    max_episode_steps = 3_000
 
     # make the vectorized environment:
     env = make_vec_env("Nav2D-v0",
@@ -47,6 +48,7 @@ def init_model(hyperparameters : dict,
                                      "reward_scale_options" : reward_scale,
                                      "randomization_options" : randomization_options,
                                      "obstacle_options" : obstacle_options,
+                                     "n_ray_groups" : n_ray_groups,
                                      "render_mode" : "rgb_array"},
                         vec_env_cls = SubprocVecEnv,
                         vec_env_kwargs = dict(start_method = "forkserver"),
@@ -216,7 +218,7 @@ def train_model(model,
     # train using model.learn():
     for run in tqdm(range(1, number_of_runs + 1), ncols = 100, colour = "#33FF00", desc = f"{result_number} training progress"):
         # learn every run:
-        model.learn(total_timesteps = steps_per_run, tb_log_name = f"{result_number}", reset_num_timesteps = False)
+        model.learn(total_timesteps = steps_per_run, tb_log_name = f"{result_number}", reset_num_timesteps = False, log_interval = 1)
 
         # set the run saving path:
         run_dir = os.path.join(results_path, f"run_{run}")
@@ -370,42 +372,45 @@ def main(do_studies : bool = False,
     tensorboard_log_dir = os.path.join(dir_path, "results", "Nav2D_SAC_SB3_tensorboard")
 
     # set the training parameters:
-    number_of_runs = 100
-    steps_per_run = 100_000
+    number_of_runs = 1_000
+    steps_per_run = 10_000
 
     # if not using optuna:
     if not do_studies:
         # scales and options:
         reward_scale = {
                         "rew_dist_scale" : 0.0,               
-                        "rew_dist_approach_scale" : 150.0,
+                        "rew_dist_approach_scale" : 8.0,
                         "rew_head_scale" : 0.0,
-                        "rew_head_approach_scale" : 125.0,   
-                        "rew_goal_scale" : 1_000.0,          
-                        "rew_obst_scale" : -250.0,
-                        "rew_obs_dist_scale" : 125.0,        
-                        "rew_time" : -0.1}                 
+                        "rew_head_approach_scale" : 3.0,  
+                        "rew_goal_scale" : 100.0,          
+                        "rew_obst_scale" : -5.0,
+                        "rew_obs_dist_scale" : 0.5,        
+                        "rew_time" : -0.05}                 
         
         randomization_options = {"randomization_freq" : 1}
         
         obstacle_options = {"n_obstacles" : 10}
+
+        n_ray_groups = 36
         
         # model hyperparameters:
-        actor_arch = [256, 256]
-        critic_arch = [256, 256]
-        policy_kwargs = {"net_arch" : {"pi" : actor_arch, "qf" : critic_arch}}
+        pi_arch = [256, 256]
+        qf_arch = [256, 256]
+        policy_kwargs = dict(activation_fn = torch.nn.ReLU,
+                            net_arch = dict(pi = pi_arch, qf = qf_arch))
 
         hyperparameters = {"policy" : "MlpPolicy",
-                        "actor_lr" : 3e-5,
+                        "actor_lr" : 3e-4,
                         "critic_lr" : 3e-4,
                         "buffer_size" : int(2.0e6),
                         "learning_starts" : int(1e5),
-                        "batch_size" : 256,
+                        "batch_size" : 512,
                         "tau" : 5e-3,
                         "gamma" : 0.99,
-                        "train_freq" : 4,
+                        "train_freq" : 1,
                         "target_update_interval" : 1,
-                        "gradient_steps" : 4,
+                        "gradient_steps" : 1,
                         "ent_coef" : "auto",
                         "target_entropy" : "auto",
                         "action_noise" : None,
@@ -419,6 +424,7 @@ def main(do_studies : bool = False,
                                 reward_scale = reward_scale,
                                 randomization_options = randomization_options,
                                 obstacle_options = obstacle_options,
+                                n_ray_groups = n_ray_groups,
                                 normalize = normalize)
         
         # train the model:
@@ -431,7 +437,7 @@ def main(do_studies : bool = False,
                     number_of_runs = number_of_runs,
                     steps_per_run = steps_per_run,
                     normalize = normalize)
-        
+
     # if using optuna:
     else:
         # set the study parameters:
