@@ -19,13 +19,14 @@ from collections import deque
 
 
 result_dir = os.path.join(os.getcwd(),"python","environments")
-result_nums = [f"result_00{i}"for i in range(179, 182)]
-result_nums = ["result_00183"]
-run_num = 500
-goal_bound_ratio = 1.0
+result_nums = [f"result_00{i}"for i in range(280, 290)]
+# result_nums = ["result_00"]
+run_num = 250
+agent_bound_ratio = 0.7
+goal_bound_ratio = 0.2
 
 # testing parameters
-n_test = 50
+n_test = 100
 report_freq = 100
 success_window = deque(maxlen=report_freq)
 normalized = True
@@ -33,7 +34,7 @@ normalized = True
 # environment options
 width = 800
 height = 800
-render_mode = "human" if n_test<=100 else "rgb_array"
+render_mode = "human" if n_test<100 else "rgb_array"
 camera_id = 2
 
 DEFAULT_CAMERA = "overhead_camera"
@@ -41,19 +42,18 @@ ENABLE_FRAME = True                     # enable the body frames
 RENDER_EVERY_FRAME = True              # similar sim speed as MuJoCo rendering when set to False, else slower
 
 reward_scale = {
-        "rew_dist_scale":           0.0,
-        "rew_dist_approach_scale":  75.0,
-        "rew_head_scale":           0.0,
-        "rew_head_approach_scale":  75.0,
-        "rew_time":                 -0.1,
-        "rew_goal_scale":           3_000.0,
-        "rew_obst_scale":           -1_000.0
+    "rew_dist_scale":           0.0,
+    "rew_dist_approach_scale":  100.0,
+    "rew_head_scale":           0.0,
+    "rew_head_approach_scale":  200.0,
+    "rew_obs_dist_scale":       20.0,
+    "rew_time":                 -1.0,
+    "rew_goal_scale":           3_000.0,
+    "rew_obst_scale":           -500.0
 }
 
 randomization_options = {
-    "agent_freq": 1,
-    "goal_freq": 1, 
-    "obstacle_freq": 1
+    "randomization_freq": 1
 }
 
 obstacle_options = {
@@ -63,7 +63,7 @@ obstacle_options = {
 def eval():
     
     for result_num in result_nums:
-        print(f"Evaluating {result_num}, run {run_num:3d}")
+        print(f"Evaluating {result_num}, run {run_num:3d} w/ {obstacle_options['n_obstacles']} obstacles")
         result_path = os.path.join(result_dir, "results", "Nav2D_TD3_SB3_results", result_num)
         run_path = os.path.join(result_path, f"run_{run_num}")
 
@@ -91,20 +91,24 @@ def eval():
                 test_env = DummyVecEnv([lambda: core_env])
             else:
                 test_env = make_vec_env("Nav2D-v0", 
-                                        n_envs=2,
-                                        env_kwargs={"max_episode_steps": 2_500,
+                                        n_envs=10,
+                                        env_kwargs={"max_episode_steps": 5_000,
                                                     "is_eval": True,
                                                     "reward_scale_options": reward_scale,
                                                     "randomization_options": randomization_options
                                                     },
                                         vec_env_cls=SubprocVecEnv,
                                         vec_env_kwargs=dict(start_method='forkserver'))
+                
             test_env = VecNormalize.load(os.path.join(result_path, f"norm_stats_{run_num}.pkl"), test_env)
             test_env.training = False
             test_env.norm_reward = False
 
+            test_env.venv.env_method("_set_agent_bound", agent_bound_ratio)
             test_env.venv.env_method("_set_goal_bound", goal_bound_ratio)
-            print(f"created a normalized environment with the goal bound set to {test_env.venv.get_attr('goal_bound')[0]} ({goal_bound_ratio*100:5.2f}%)")
+            print(f"created a normalized environment with"
+                  f"agent bound = {test_env.venv.get_attr('agent_bound')[0]} ({agent_bound_ratio*100:5.2f}%) | "
+                  f"goal bound = {test_env.venv.get_attr('goal_bound')[0]} ({goal_bound_ratio*100:5.2f}%)") 
             model_load = TD3.load(run_path, env=test_env)
         else:
             print("created a core environment (unnormalized)")
