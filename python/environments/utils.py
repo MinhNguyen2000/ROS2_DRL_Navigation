@@ -3,6 +3,14 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from collections import deque
 
+# Packages for parsing tensorboard log
+from dataclasses import dataclass
+import pandas as pd
+import numpy as np
+from pathlib import Path
+from typing import List, Sequence, Dict
+from tbparse import SummaryReader
+
 default_reward_scale = {
         "rew_dist_scale":           0.0,
         "rew_dist_approach_scale":  75.0,
@@ -159,3 +167,167 @@ class AdvanceEnvCallback(BaseCallback):
                 f"success={success_count} ({success_count/eps_sum*100:5.2f}%) | "
                 f"obstacle={obstacle_count} ({obstacle_count/eps_sum*100:5.2f}%) | "
                 f"trunc={trunc_count} ({trunc_count/eps_sum*100:5.2f}%)")
+
+@dataclass
+class RunData:
+    run_name: str
+    df: pd.DataFrame
+    tag: str
+    
+class TensorBoardParser():
+    def __init__(self, 
+                 log_dirs: Sequence[str | Path],
+                 tags: str="rollout/success_rate"):
+        '''
+        Docstring for __init__
+        
+        :param log_dirs: Path(s) to the tensorboard log file(s)
+        :param tags: Metrics to extract from the tensorboard log
+
+        :type log_dirs: Sequence[str | Path]
+        :type tags: str
+        '''
+        self.log_dirs = [Path(p) for p in log_dirs]
+        self.tag = tags
+        self.runs: List[RunData] = []
+
+    def load(self):
+        '''
+        Parse the training metric data from the TensorBoard logs of the specified runs 
+        and store them as a list of RunData objects
+        '''
+
+        runs: List[RunData] = []
+        for log_dir in self.log_dirs:
+            reader =SummaryReader(log_dir)
+            df = reader.scalars
+
+            run_name = log_dir.name
+            
+            # filter by the corresponding tag (e.g. rows with tag==rollout/success_rate)
+            tag_df = df[df['tag'] == self.tag].copy()
+
+            # handle duplicated steps, only keeping the first value in this case
+            unique_tag_df = tag_df.loc[~tag_df['step'].duplicated(keep="first")]
+
+            runs.append(
+                RunData(
+                    run_name=run_name,
+                    df=unique_tag_df[["step", "value"]].reset_index(drop=True),
+                    tag=self.tag
+                )
+            )
+
+        self.runs = runs
+
+    def build_grid(self, step_interval: int = 5_000):
+        '''
+        Build a common regularly spaced grid as the x axis for the final plot
+        
+        :param step_interval: The interval between steps
+        :type step_interval: int
+        '''
+        if self.runs is None:
+            raise ValueError("No run loaded; call .load() first")
+        
+        # find the minimum and maximum step value across the runs
+        min_step = min([min(run.df['step']) for run in self.runs])
+        max_step = max([max(run.df['step']) for run in self.runs])
+    
+        # common grid
+        return np.arange(start=min_step, stop = max_step+step_interval, step=step_interval)
+
+    def interp_on_grid(self,
+                       grid: np.ndarray,
+                       method: str = 'linear'):
+        '''
+        Inter/Extrapolate the values from the existing time steps in each run to those of the common grid
+        
+        :param self: Description
+        :param method: Method of interpolation ('linear', 'index', ...)
+        '''
+        if self.runs is None:
+            raise ValueError("No run loaded; call .load() first")
+        
+
+        aligned_cols: Dict[str, pd.Series] = {}
+        
+        # process the values at each run in the aligned_cols dict
+        for run in self.runs:
+            df=run.df.set_index('step').sort_index()      # use the step number as the df index
+
+            # create a sorted full index list including the original df indices and the common regular indices
+            full_index = np.unique(np.concatenate([df.index, grid]))
+
+            # reindex the original df with the big index list, filling missing values (at the time steps of the common grid) with NaN
+            reindexed_df = df.reindex(full_index)
+
+            # interpolate the missing values using the neighboring values
+            # border values are populated by forward/backward fills
+            interpolated_df = reindexed_df['value'].interpolate(method=method).ffill().bfill()
+
+            # draw the values at the common grid indices to equalize the values of each run
+            aligned_cols[run.run_name] = interpolated_df.loc[grid]
+
+        # turn the aligned_cols dict created above to a final df
+        aligned_df = pd.DataFrame(aligned_cols, index=grid)
+        return aligned_df
+
+    def aggregate(
+            self, 
+            aligned: pd.DataFrame,
+            band: str = "minmax"
+        ):
+        '''
+        Compute the mean and bands (min/max or mean±std) accross runs and return a DataFrame with columns step, mean, low, high
+        
+        :param self: Description
+        :param aligned: Dataframe with data from each runs with the indices aligned to a common grid
+        :param band: Method of displaying the shaded min-max region (`minmax` for raw min-max values and `std` for mean±std lower and upper bounds)
+
+        :type aligned: pd.DataFrame
+        :type band: str
+        '''
+
+        mean = aligned.mean(axis=1)     # axis=1 find statistics across runs (columns)
+
+        if band == "minmax":
+            low = aligned.min(axis=1)
+            high = aligned.max(axis=1)
+        elif band == "std":
+            std = aligned.std(axis=1)
+            low = mean-std
+            high = mean+std
+        else:
+            raise ValueError("band must be 'minmax' or 'std'")
+        
+        return pd.DataFrame(
+            {
+                'step': aligned.index.values,
+                'mean': mean.values,
+                'low': low.values,
+                'high': high.values
+            }
+        )
+
+    
+    def run(self,
+            step_interval: int = 5_000,
+            method: str = 'linear',
+            band: str = 'minmax'):
+        
+        '''
+        Compute the mean and min/max statistics at the common steps across different runs
+        
+        :param self: Description
+        :param method: The linear interpolation method, default to linear interpolation (read pandas df.interpolate for more method)
+        :param band: Method for reporting the min-max band ('minmax' for raw values, 'std' for mean±std lower/upper bounds)
+
+        :type method: str
+        :type band: str
+        '''
+        self.load()
+        common_grid = self.build_grid(step_interval=step_interval)
+        aligned = self.interp_on_grid(grid=common_grid, method=method)
+
+        return self.aggregate(aligned=aligned, band=band)
