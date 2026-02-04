@@ -112,8 +112,8 @@ class Nav2D(MujocoEnv):
         self.rew_dist_scale             = reward_scale_options.get("rew_dist_scale", 1)             if reward_scale_options else 1
         self.rew_dist_approach_scale    = reward_scale_options.get("rew_dist_approach_scale", 125)  if reward_scale_options else 125
         self.rew_head_scale             = reward_scale_options.get("rew_head_scale", 1)             if reward_scale_options else 1
-        self.rew_obs_dist_scale         = reward_scale_options.get("rew_obs_dist_scale", 125)       if reward_scale_options else 125
         self.rew_head_approach_scale    = reward_scale_options.get("rew_head_approach_scale", 125)  if reward_scale_options else 125
+        self.rew_obs_dist_scale         = reward_scale_options.get("rew_obs_dist_scale", 125)       if reward_scale_options else 125
         self.rew_goal_scale             = reward_scale_options.get("rew_goal_scale", 5000)          if reward_scale_options else 5000
         self.rew_obst_scale             = reward_scale_options.get("rew_obst_scale", -1000)         if reward_scale_options else -1000
         self.rew_time                   = reward_scale_options.get("rew_time", -0.25)               if reward_scale_options else -0.25
@@ -123,6 +123,7 @@ class Nav2D(MujocoEnv):
         self.rew_head_approach_scaled = 0
         self.rew_dist_scaled = 0
         self.rew_dist_approach_scaled = 0
+        self.rew_obs_dist_scaled = 0
 
         # AGENT/TASK INITIALIZATION
         # --- define the uninitialized location of the agent and the target
@@ -159,13 +160,6 @@ class Nav2D(MujocoEnv):
         self.agent_id = self.model.body("agent").id
         self.goal_id = self.model.body("goal").id
 
-        # --- OBSERVATION SPACE INITIALIZATION
-        self._set_observation_space()
-        
-        #--- pre allocate observation array once
-        self._obs_buffer = np.zeros(self._obs_space_size, dtype = np.float32)
-        self._lidar_buffer = np.zeros(self.n_ray_groups, dtype=np.float32)
-
         # --- ACTION SPACE INITIALIZATION
         self._set_action_space()
 
@@ -173,6 +167,13 @@ class Nav2D(MujocoEnv):
         self.init_qvel = self.data.qvel.ravel().copy()
         self.agent_init = np.zeros(3)
         self.agent_pose = np.append(self.data.xpos[self.agent_id][:2], self.data.qpos[2])
+
+        # --- OBSERVATION SPACE INITIALIZATION
+        self._set_observation_space()
+        
+        #--- pre allocate observation array once
+        self._obs_buffer = np.zeros(self._obs_space_size, dtype = np.float32)
+        self._lidar_buffer = np.zeros(self.n_ray_groups, dtype=np.float32)
 
         # --- RENDERER INITIALIZATION
         if "render_fps" in self.metadata:
@@ -213,27 +214,43 @@ class Nav2D(MujocoEnv):
             (1, ): the distance between the agent and the goal
             (2, ): the cos(theta) and sin(theta) components of the agent's heading
             (2, ): the cos() and sin() componets of the relative bearing
+            (2, ): local velocities of the agent (along local x and about local z)
             (n_ray_grous, ): minpooled groups of LiDAR scans
 
         '''
+        # list of observation states
+        obs_states = []
+        obs_states += ["dx", "dy", "dgoal"]
+        obs_states += ["c_theta", "s_theta", "c_psi", "s_psi"] 
+        obs_states += ["v_lin", "v_ang"] 
+        obs_states += [f"lidar_{n}" for n in range(self.n_ray_groups)]
+        
         # define the obs_space_size:
-        self._obs_space_size = 2 + 1 + 2 + 2 + self.n_ray_groups
+        self._obs_space_size = len(obs_states)
+
+        # index of each quantity
+        for i, state in enumerate(obs_states):
+            setattr(self,f"obs_{state}_idx",i)
 
         # initialize the scale on the observation space as being between [-1, 1]:
         low  = -np.ones((self._obs_space_size, ), dtype = np.float32) 
         high =  np.ones((self._obs_space_size, ), dtype = np.float32)
 
         # dx and dy bounds
-        low[0:2]  = -2 * (self.size - self.agent_radius)
-        high[0:2] =  2 * (self.size - self.agent_radius)
+        low[[self.obs_dx_idx, self.obs_dy_idx]]  = -2 * (self.size - self.agent_radius)
+        high[[self.obs_dx_idx, self.obs_dy_idx]] =  2 * (self.size - self.agent_radius)
 
         # d_goal bounds 
-        low[2]    = 0
-        high[2]   = self.dmax
+        low[self.obs_dgoal_idx]    = 0
+        high[self.obs_dgoal_idx]   = self.dmax
+
+        # velocity bounds
+        low[[self.obs_v_lin_idx, self.obs_v_ang_idx]]  = self.action_low * np.array([self.linear_scale, self.angular_scale], dtype = np.float32)
+        high[[self.obs_v_lin_idx, self.obs_v_ang_idx]] = self.action_high * np.array([self.linear_scale, self.angular_scale], dtype = np.float32)
         
         # LiDAR bounds
-        low[7:]  = 0.0
-        high[7:] = self.dmax + np.sqrt(2 * self.agent_radius**2)
+        low[self.obs_lidar_0_idx:]  = 0.0
+        high[self.obs_lidar_0_idx:] = self.dmax + np.sqrt(2 * self.agent_radius**2)
 
         # set the observation space:
         self.observation_space = gym.spaces.Box(
@@ -246,7 +263,7 @@ class Nav2D(MujocoEnv):
     def _set_action_space(self):
         ''' internal method to set the bounds on the agent's local x_linear and z_angular velocities'''
         # set the low and high of the action space:
-        self.action_low = np.array([0, -1.0], dtype = np.float32)
+        self.action_low = np.array([0.0, -1.0], dtype = np.float32)
         self.action_high = np.array([1.0, 1.0], dtype = np.float32)
 
         self.action_space = gym.spaces.Box(low = self.action_low, high = self.action_high, dtype = np.float32)
@@ -286,17 +303,23 @@ class Nav2D(MujocoEnv):
         rel_bearing = - ((bearing - heading + np.pi) % (2*np.pi) - np.pi)  
         c_bearing = np.cos(rel_bearing, dtype=np.float32)
         s_bearing = np.sin(rel_bearing, dtype=np.float32)
+
+        # calculate the local velocities - linear and angular 
+        vx, vy, vz = self.data.qvel[0:3]
+        v_lin = np.sqrt(vx ** 2 + vy ** 2) / self.linear_scale
+        v_ang = vz / self.angular_scale
     
         lidar = self.data.sensordata[:-1]
         for i in range(self.n_ray_groups):
             self._lidar_buffer[i] = np.min(lidar[self._ray_per_group*i:self._ray_per_group*(i+1)])
 
         #--- modify obs buffer inplace instead of concatenation overhead (time + memory):
-        self._obs_buffer[0:2] = dx, dy
-        self._obs_buffer[2]   = np.sqrt(dx ** 2 + dy ** 2)
-        self._obs_buffer[3:5] = c_theta, s_theta
-        self._obs_buffer[5:7] = c_bearing, s_bearing
-        self._obs_buffer[7:]  = self._lidar_buffer
+        self._obs_buffer[[self.obs_dx_idx, self.obs_dy_idx]] = dx, dy
+        self._obs_buffer[self.obs_dgoal_idx] = np.sqrt(dx ** 2 + dy ** 2)
+        self._obs_buffer[[self.obs_c_theta_idx, self.obs_s_theta_idx]] = c_theta, s_theta
+        self._obs_buffer[[self.obs_c_psi_idx, self.obs_s_psi_idx]] = c_bearing, s_bearing
+        self._obs_buffer[[self.obs_v_lin_idx, self.obs_v_ang_idx]] = v_lin, v_ang
+        self._obs_buffer[self.obs_lidar_0_idx:]  = self._lidar_buffer
 
         self.agent_pose = np.append(self.data.xpos[self.agent_id][:2], self.data.qpos[2])
 
@@ -339,7 +362,7 @@ class Nav2D(MujocoEnv):
             # while the obstacle is not placed:
             while not satisfied:
                 # generate an initial position for an obstacle: 
-                candidate_obstacle = np.random.uniform(low = -self.obstacle_bound, high = self.obstacle_bound, size = 2)
+                candidate_obstacle = self.np_random.uniform(low = -self.obstacle_bound, high = self.obstacle_bound, size = 2)
 
                 # counter for passes:
                 passes = 0
@@ -416,19 +439,22 @@ class Nav2D(MujocoEnv):
         ob = self._get_obs()
 
         # get the previous d_goal:
-        dx, dy = ob[0:2]
-        self.d_goal_last = ob[2]                        # to track distance approach progress
+        dx, dy = ob[[self.obs_dx_idx, self.obs_dy_idx]]
+        self.d_goal_last = ob[self.obs_dgoal_idx]       # to track distance approach progress
         self.d_init = self.d_goal_last                  # to track overall distance progress
    
         # get the initial abs_diff
-        c_bearing, s_bearing = ob[5:7]
+        c_bearing, s_bearing = ob[[self.obs_c_psi_idx, self.obs_s_psi_idx]]
         self.prev_abs_diff = abs(np.arctan2(s_bearing, c_bearing, dtype=np.float32))
         self.abs_diff_init = self.prev_abs_diff
 
         # get the initial min_dist:
-        lidar_obs = ob[7:]
+        lidar_obs = ob[self.obs_lidar_0_idx:]
         min_dist = min(lidar_obs)
         self.min_dist_last = min_dist
+
+        # TODO - implemented to penalize large changes in control actions. Remove if not effective
+        self.action_last = qvel_array[0:2]
 
         # reset the distance progress count
         self.dist_progress_count = 0
@@ -507,12 +533,13 @@ class Nav2D(MujocoEnv):
         mj.mj_step(self.model, self.data, nstep = self.frame_skip)
 
         # 2. collect the new observation (LiDAR simulation, location of agent/goal using the custom _get_obs())
-        nobs = self._get_obs()      # this is [d_goal, abs_diff, LiDAR]
-        dx, dy                  = nobs[0:2]
-        d_goal                  = nobs[2]
-        c_theta, s_theta        = nobs[3:5]
-        c_bearing, s_bearing    = nobs[5:7]
-        lidar_obs               = nobs[7:]
+        nobs = self._get_obs()
+        dx, dy                  = nobs[[self.obs_dx_idx, self.obs_dy_idx]]
+        d_goal                  = nobs[self.obs_dgoal_idx]
+        c_theta, s_theta        = nobs[[self.obs_c_theta_idx, self.obs_s_theta_idx]]
+        c_bearing, s_bearing    = nobs[[self.obs_c_psi_idx, self.obs_s_psi_idx]]
+        v_lin, v_ang            = nobs[[self.obs_v_lin_idx, self.obs_v_ang_idx]]
+        lidar_obs               = nobs[self.obs_lidar_0_idx:]
 
         # get the minimum LiDAR reading:
         min_dist = min(lidar_obs)
@@ -625,7 +652,8 @@ class Nav2D(MujocoEnv):
         self.d_goal_last = d_goal
         self.prev_abs_diff = abs_diff
         self.min_dist_last = min_dist
-        
+        self.action_last = action
+
         # 5. info (optional):
         # info = {"reward": rew, "dist_cond": distance_cond, "obst_cond": obstacle_cond}
         
