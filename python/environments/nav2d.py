@@ -305,9 +305,11 @@ class Nav2D(MujocoEnv):
         s_bearing = np.sin(rel_bearing, dtype=np.float32)
 
         # calculate the local velocities - linear and angular 
-        vx, vy, vz = self.data.qvel[0:3]
-        v_lin = np.sqrt(vx ** 2 + vy ** 2) / self.linear_scale
-        v_ang = vz / self.angular_scale
+        # vx, vy, vz = self.data.qvel[0:3]
+        # v_lin = np.sqrt(vx ** 2 + vy ** 2) / self.linear_scale
+        # v_ang = vz / self.angular_scale
+        v_lin = self.action_last[0]
+        v_ang = self.action_last[1]
     
         lidar = self.data.sensordata[:-1]
         for i in range(self.n_ray_groups):
@@ -435,6 +437,9 @@ class Nav2D(MujocoEnv):
         #     qpos[2] = self.agent_pose[2] if (not self.collision) else self.init_qpos[2]
         #     qvel[:3] = np.zeros(3)
 
+        # TODO - implemented to penalize large changes in control actions. Remove if not effective
+        self.action_last = qvel_array[0:2]
+
         self.set_state(qpos_array, qvel_array)
         ob = self._get_obs()
 
@@ -452,9 +457,6 @@ class Nav2D(MujocoEnv):
         lidar_obs = ob[self.obs_lidar_0_idx:]
         min_dist = min(lidar_obs)
         self.min_dist_last = min_dist
-
-        # TODO - implemented to penalize large changes in control actions. Remove if not effective
-        self.action_last = qvel_array[0:2]
 
         # reset the distance progress count
         self.dist_progress_count = 0
@@ -632,8 +634,12 @@ class Nav2D(MujocoEnv):
 
             # print to user:
             if self.render_mode == "human":
-                # # observation debug
-                # print(f" @ episode {self.episode_counter} | (dx,dy)=({dx:4.2f},{dy:4.2f}) | theta={heading/np.pi*180: 5.2f} | d_goal: {d_goal:5.3f}  |  bearing: {bearing/np.pi*180: 5.2f}  |  abs_diff: {abs_diff/np.pi*180: 5.2f}      ", end="\r")
+                # observation debug
+                print(f" @ episode {self.episode_counter} | "
+                      f"(dx,dy)=({dx: 4.2f},{dy: 4.2f}) | d_goal={d_goal:5.3f}  | "
+                      fr"θ={heading/np.pi*180: 6.2f} | Ψ={bearing/np.pi*180: 6.2f} | "
+                      f"(vx, vz)_(t-1)=({v_lin: 5.3f},{v_ang: 5.3f}) | "
+                      f"(vx, vz)_t={action[0]: 5.3f},{action[1]: 5.3f}          ", end="\r")
 
                 # # lidar debug
                 # print(lidar_obs)
