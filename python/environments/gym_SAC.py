@@ -10,7 +10,9 @@
 from stable_baselines3 import SAC
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, DummyVecEnv
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.noise import NormalActionNoise
 import torch
+from utils import AdvanceEnvCallback
 
 import gymnasium as gym
 import nav2d
@@ -56,7 +58,7 @@ def init_model(hyperparameters : dict,
     
     # wrap environments in a normalization wrapper:
     if normalize:
-        env = VecNormalize(env, norm_obs = True, norm_reward = True)
+        env = VecNormalize(env, norm_obs = True, norm_reward = True, )
 
     # make the model:
     model = SAC(policy = hyperparameters["policy"],
@@ -71,7 +73,7 @@ def init_model(hyperparameters : dict,
                 target_update_interval = hyperparameters["target_update_interval"],
                 gradient_steps = hyperparameters["gradient_steps"],
                 target_entropy = hyperparameters["target_entropy"],
-                action_noise = hyperparameters["action_noise"],
+                action_noise = NormalActionNoise(mean = np.zeros(env.action_space.shape), sigma = hyperparameters["action_noise_std"] * np.ones(env.action_space.shape)),
                 verbose = hyperparameters["verbose"],
                 device = "cuda" if hyperparameters["gpu"] else "cpu",
                 policy_kwargs = hyperparameters["policy_kwargs"],
@@ -181,6 +183,7 @@ def train_model(model,
                 reward_scale : dict,
                 randomization_options : dict,
                 hyperparameters : dict,
+                callback,
                 number_of_runs : int = 100,
                 steps_per_run : int = 25000,
                 normalize : bool = False):
@@ -205,7 +208,7 @@ def train_model(model,
     hyperparam_codified += f"{hyperparameters["train_freq"]}_{hyperparameters["gradient_steps"]}_{hyperparameters["ent_coef"]}_{hyperparameters["target_update_interval"]}_{hyperparameters["target_entropy"]}_"
     hyperparam_codified += f"{reward_scale['rew_head_scale']}_{reward_scale["rew_head_approach_scale"]}_{reward_scale["rew_obs_dist_scale"]}_{reward_scale['rew_dist_scale']}_{reward_scale['rew_dist_approach_scale']}_{reward_scale['rew_goal_scale']}_{reward_scale['rew_obst_scale']}_{reward_scale['rew_time']}_"
     # hyperparam_codified += f"{reward_scale['rew_head_scale']}_{reward_scale['rew_dist_scale']}_{reward_scale['rew_goal_scale']}_{reward_scale['rew_obst_scale']}_"
-    hyperparam_codified += f"{randomization_options['randomization_freq']}"
+    hyperparam_codified += f"{randomization_options['randomization_freq']}_{hyperparameters["action_noise_std"]}"
 
     timestamp = datetime.now().strftime("%y%m%d_%H%M")
     hyperparam_codified_time = f"{timestamp}_" + hyperparam_codified
@@ -218,7 +221,11 @@ def train_model(model,
     # train using model.learn():
     for run in tqdm(range(1, number_of_runs + 1), ncols = 100, colour = "#33FF00", desc = f"{result_number} training progress"):
         # learn every run:
-        model.learn(total_timesteps = steps_per_run, tb_log_name = f"{result_number}", reset_num_timesteps = False, log_interval = 1)
+        model.learn(total_timesteps = steps_per_run, 
+                    tb_log_name = f"{result_number}", 
+                    reset_num_timesteps = False, 
+                    log_interval = 1, 
+                    callback = callback)
 
         # set the run saving path:
         run_dir = os.path.join(results_path, f"run_{run}")
@@ -373,47 +380,48 @@ def main(do_studies : bool = False,
 
     # set the training parameters:
     number_of_runs = 1_000
-    steps_per_run = 10_000
+    steps_per_run = 50_000
 
     # if not using optuna:
     if not do_studies:
         # scales and options:
         reward_scale = {
                         "rew_dist_scale" : 0.0,               
-                        "rew_dist_approach_scale" : 8.0,
+                        "rew_dist_approach_scale" : 200.0,
                         "rew_head_scale" : 0.0,
-                        "rew_head_approach_scale" : 3.0,  
-                        "rew_goal_scale" : 100.0,          
-                        "rew_obst_scale" : -5.0,
-                        "rew_obs_dist_scale" : 0.5,        
-                        "rew_time" : -0.05}                 
+                        "rew_head_approach_scale" : 200.0,  
+                        "rew_goal_scale" : 3_000.0,          
+                        "rew_obst_scale" : -250.0,
+                        "rew_obs_dist_scale" : 0.0, 
+                        "rew_obs_align_scale" : 0.5,       
+                        "rew_time" : -0.5}                 
         
         randomization_options = {"randomization_freq" : 1}
         
         obstacle_options = {"n_obstacles" : 10}
 
-        n_ray_groups = 36
+        n_ray_groups = 18
         
         # model hyperparameters:
-        pi_arch = [256, 256]
-        qf_arch = [256, 256]
+        pi_arch = [512, 256]
+        qf_arch = [512, 256]
         policy_kwargs = dict(activation_fn = torch.nn.ReLU,
                             net_arch = dict(pi = pi_arch, qf = qf_arch))
 
         hyperparameters = {"policy" : "MlpPolicy",
                         "actor_lr" : 3e-4,
                         "critic_lr" : 3e-4,
-                        "buffer_size" : int(2.0e6),
-                        "learning_starts" : int(1e5),
+                        "buffer_size" : int(2e6),
+                        "learning_starts" : int(512),
                         "batch_size" : 512,
-                        "tau" : 5e-3,
+                        "tau" : 1e-3,
                         "gamma" : 0.99,
-                        "train_freq" : 1,
+                        "train_freq" : 2,
                         "target_update_interval" : 1,
-                        "gradient_steps" : 1,
+                        "gradient_steps" : 4,
                         "ent_coef" : "auto",
                         "target_entropy" : "auto",
-                        "action_noise" : None,
+                        "action_noise_std" : 0.05,
                         "verbose" : 0, 
                         "gpu" : True,
                         "policy_kwargs": policy_kwargs,
@@ -426,6 +434,10 @@ def main(do_studies : bool = False,
                                 obstacle_options = obstacle_options,
                                 n_ray_groups = n_ray_groups,
                                 normalize = normalize)
+    
+        # instantiate a callback:
+        # callback = AdvanceEnvCallback(success_window = 50, success_threshold = 0.90,  obstacle_per_level = 5)
+        callback = None
         
         # train the model:
         _, _ = train_model(model = model, 
@@ -436,7 +448,8 @@ def main(do_studies : bool = False,
                     hyperparameters = hyperparameters,
                     number_of_runs = number_of_runs,
                     steps_per_run = steps_per_run,
-                    normalize = normalize)
+                    normalize = normalize,
+                    callback = callback)
 
     # if using optuna:
     else:
