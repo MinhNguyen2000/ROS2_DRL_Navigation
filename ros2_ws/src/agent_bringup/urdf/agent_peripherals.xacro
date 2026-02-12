@@ -1,0 +1,76 @@
+<?xml version = "1.0"?>
+<robot xmlns:xacro = "http://www.ros.org/wiki/xacro">
+    <!-- PERIPHERALS -->
+    <!-- lidar -->
+    <link name = "${prefix}_lidar_link">
+        <visual>
+            <origin xyz = "0 0 0" rpy = "1.570796 0 1.570796"/>
+            <geometry>
+                <mesh filename = "file://$(find mrs_robot_launcher)/meshes/lidar.STL" scale = "0.001 0.001 0.001"/>
+            </geometry>
+            <material name = "black"/>
+        </visual>
+
+        <collision>
+            <origin xyz = "0 0 -0.0005" rpy = "0 0 0"/>
+            <geometry>
+                <cylinder radius = "0.047" length = "0.04"/>
+            </geometry>
+        </collision>
+
+        <inertial>
+            <mass value = "0.19"/>
+            <xacro:cylinder_inertia
+                mass = "0.19"
+                radius = "0.047"
+                length = "0.04"
+            />
+        </inertial>
+    </link>
+
+    <!-- lidar to chassis joint -->
+    <joint name = "${prefix}_lidar_joint" type = "fixed">
+        <origin xyz = "0.0405 5.25826986680105E-05 0.08285" rpy = "0 0 0"/>
+        <parent link = "${prefix}_chassis_link"/>
+        <child link = "${prefix}_lidar_link"/>
+    </joint>
+
+    <!-- depth camera link -->
+    <link name = "${prefix}_depth_camera_link">
+        <visual>
+            <origin xyz = "-0.018 0 0" rpy = "0 0 0"/>
+            <geometry>
+                <mesh filename = "file://$(find agent_bringup)/meshes/camera.STL"/>
+            </geometry>
+            <material name = "black"/>
+        </visual>
+
+        <inertial>
+            <mass value = "0.30393"/>
+            <xacro:box_inertia
+                mass = "0.30393"
+                w = "0.06"
+                h = "0.05"
+                d = "0.165"
+            />
+        </inertial>
+    </link>
+
+    <!-- depth camera to chassis joint -->
+    <joint name = "${prefix}_camera_joint" type = "fixed">
+        <origin xyz = "0.075105 1.7948E-05 0.03755" rpy = "0 0 0"/>
+        <parent link = "${prefix}_chassis_link"/>
+        <child link = "${prefix}_depth_camera_link"/>
+    </joint>
+
+    <!-- optical link for depth camera coordinate frame -->
+    <link name = "${prefix}_depth_camera_optical_link">
+    </link>
+
+    <!-- optical depth camera link to actual depth camera link joint: -->
+    <joint name = "${prefix}_camera_optical_joint" type = "fixed">
+        <origin xyz = "0 0 0" rpy = "-1.570796 0 -1.570796"/>
+        <parent link = "${prefix}_depth_camera_link"/>
+        <child link = "${prefix}_depth_camera_optical_link"/>
+    </joint>
+</robot>

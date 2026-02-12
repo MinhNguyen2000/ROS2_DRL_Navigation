@@ -6,7 +6,7 @@
 
     <!-- INCLUDE FILES -->
     <xacro:include filename = "agent_body.xacro"/>
-    <!-- <xacro:include filename = "agent_peripherals.xacro"/> -->
+    <xacro:include filename = "agent_peripherals.xacro"/>
     <!-- <xacro:include filename = "agent_gazebo_properties.xacro"/> -->
 
 </robot>
