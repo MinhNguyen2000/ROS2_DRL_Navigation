@@ -12,25 +12,28 @@ from typing import List, Sequence, Dict
 from tbparse import SummaryReader
 
 default_reward_scale = {
-        "rew_dist_scale":           0.0,
-        "rew_dist_approach_scale":  75.0,
-        "rew_head_scale":           0.0,
-        "rew_head_approach_scale":  75.0,
-        "rew_time":                 -0.5,
-        "rew_goal_scale":           3_000.0,
-        "rew_obst_scale":           -1_000.0}
+    "rew_dist_scale" : 0.0,               
+    "rew_dist_approach_scale" : 200.0,
+    "rew_head_scale" : 0.0,
+    "rew_head_approach_scale" : 200.0,  
+    "rew_goal_scale" : 3_000.0,          
+    "rew_obst_scale" : -250.0,
+    "rew_obs_dist_scale" : 0.0,
+    "rew_obs_align_scale" : 0.5,        
+    "rew_time" : -0.5} 
 
 default_randomization_options = {"randomization_freq": 1}
 
 default_obstacle_options = {"n_obstacles": 0}
 
 def make_env(n_proc: int = 12,
-            seed: int = 73,
-            max_episode_steps: int = 2_000,
+            seed: int = 42,
+            max_episode_steps: int = 3_000,
             reward_scale: dict = default_reward_scale,
             randomization_options: dict = default_randomization_options,
             obstacle_options: dict = default_obstacle_options,
-            normalize: bool=True):
+            normalize: bool=True,
+            n_ray_groups: int = 18):
 
         print("Making subprocess vectorized environments!")
         env = make_vec_env("Nav2D-v0", 
@@ -39,7 +42,8 @@ def make_env(n_proc: int = 12,
                             env_kwargs={"max_episode_steps": max_episode_steps,
                                         "reward_scale_options": reward_scale,
                                         "randomization_options": randomization_options,
-                                        "obstacle_options": obstacle_options
+                                        "obstacle_options": obstacle_options,
+                                        "n_ray_groups" : n_ray_groups
                                         },
                             vec_env_cls=SubprocVecEnv, 
                             vec_env_kwargs=dict(start_method='forkserver'))
@@ -131,6 +135,8 @@ class AdvanceEnvCallback(BaseCallback):
         num_envs    = old_env.num_envs
         reward_scale_option     = old_env.get_attr("reward_scale_options")[0]
         randomization_options   = old_env.get_attr("randomization_options")[0]
+        n_ray_groups            = old_env.get_attr("n_ray_groups")[0]
+
         if old_env is not None:
             old_env.close()
 
@@ -141,7 +147,8 @@ class AdvanceEnvCallback(BaseCallback):
         env = make_env(n_proc=num_envs,
                         reward_scale=reward_scale_option,
                         randomization_options=randomization_options,
-                        obstacle_options=obstacle_options)
+                        obstacle_options=obstacle_options,
+                        n_ray_groups = n_ray_groups)
         env.reset()
         self.model.set_env(env)
         model_env = self.model.get_env()
