@@ -60,6 +60,8 @@ class Nav2D(MujocoEnv):
         self.n_rays = 360
         self.n_ray_groups = n_ray_groups
         self._ray_per_group = int(self.n_rays/self.n_ray_groups)
+        self.desired_clearance_angle = 80
+        self.lidar_idx_threshold = int(self.desired_clearance_angle / self._ray_per_group)
 
         self.linear_scale = 2
         self.angular_scale = 3
@@ -83,6 +85,7 @@ class Nav2D(MujocoEnv):
         self.head_progress_count = 0
         self.progress_threshold = 100 if not is_eval else 500   # number of maximum allowable episodes where the agent has not made any progress toward the goal
         self.obstacle_threshold = self.allowance + self.agent_radius    # this is basically the footprint radius of the agent
+        self.d_safe = 0.5
         self.collision = False
 
         # --- RANDOMIZATION INITIALIZATION
@@ -94,7 +97,7 @@ class Nav2D(MujocoEnv):
 
         # agent randomization bounds
         self.agent_bound_init  = 2 * self.agent_radius
-        self.agent_bound_final = self.size - self.obstacle_threshold
+        self.agent_bound_final = self.size - 4 * self.obstacle_threshold
         self.agent_bound = self.agent_bound_final
         self.angle_bound = np.pi
 
@@ -117,7 +120,7 @@ class Nav2D(MujocoEnv):
         self.rew_obs_align_scale        = reward_scale_options.get("rew_obs_align_scale", 0.5)      if reward_scale_options else 0.5
         self.rew_goal_scale             = reward_scale_options.get("rew_goal_scale", 3000)          if reward_scale_options else 3000
         self.rew_obst_scale             = reward_scale_options.get("rew_obst_scale", -200)          if reward_scale_options else -200
-        self.rew_time                   = reward_scale_options.get("rew_time", -0.2)                if reward_scale_options else -0.5
+        self.rew_time                   = reward_scale_options.get("rew_time", -0.5)                if reward_scale_options else -0.5
 
         # intialize the scaled reward components
         self.rew_head_scaled = 0
@@ -404,10 +407,6 @@ class Nav2D(MujocoEnv):
         noise_low = -0.1
         noise_high = 0.1
 
-        # get a copy of the initial_qpos
-        # qpos = np.copy(self.init_qpos)
-        # qvel = np.copy(self.init_qvel)
-
         qpos_array = np.copy(self.init_qpos)
         qvel_array = np.copy(self.init_qvel)
 
@@ -478,7 +477,6 @@ class Nav2D(MujocoEnv):
         # reset model data:
         mj.mj_resetData(self.model, self.data)
         
-
         # --- CHECK RANDOMIZATION CONDITIONS
         if not self.is_eval:
             if self.episode_counter % self.randomization_freq == 0:
@@ -560,22 +558,11 @@ class Nav2D(MujocoEnv):
 
         # when the agent is close to obstacles:
         obstacle_cond = min_dist <= self.obstacle_threshold
-        
-        # when the agent has not reduced the d_goal for N steps, where N is 200:
-        # if d_goal > self.d_goal_last: 
-        #     self.dist_progress_count += 1
-        # else:
-        #     self.dist_progress_count = 0
 
-        # # when the abs_diff is more than 15 degrees and still growing:
-        # if abs_diff >= self.prev_abs_diff and (abs_diff > np.deg2rad(15)):
-        #     self.head_progress_count += 1
-        # else:
-        #     self.head_progress_count = 0
-        
+        # set the termination:
         term = distance_cond or obstacle_cond 
-        # or (self.dist_progress_count >= self.progress_threshold) or (self.head_progress_count >= self.progress_threshold)
         
+        # initialize info:
         info = {}
 
         if term:
@@ -590,14 +577,15 @@ class Nav2D(MujocoEnv):
             self.collision = bool(obstacle_cond)
             
         # 4. reward:
+        # sparse rewards:
         if distance_cond:
             rew = self.rew_goal_scale
         elif obstacle_cond:
             rew = self.rew_obst_scale
+        # dense reward shaping:
         else:
-            # when not near and obstacle, focus on moving toward the goal
-            d_safe = 0.5
-            if min_dist >= d_safe:
+            #--- IF THE AGENT IS CLEAR OF OBSTACLES:
+            if min_dist >= self.d_safe:
                 #--- DISTANCE APPROACH REWARD:
                 # this reward term incentivizes approaching the goal, and rewards 0 otherwise:
                 rew_dist_approach = max((self.d_goal_last - d_goal), 0)
@@ -606,31 +594,21 @@ class Nav2D(MujocoEnv):
                 # this reward term incentivizes approaching the required heading, and rewards 0 otherwise
                 rew_head_approach = max((self.prev_abs_diff - abs_diff), 0) if action[0] >= 0.05 else 0
 
+                # zero the obstacle terms:
                 rew_obs_dist = 0
                 rew_obs_align = 0
             
             # when near an obstacle, focus on moving away
             else:
-                # PENALTY FOR APPROACHING OBSTACLES
-                rew_dist_approach = 0
-                rew_head_approach = 0
-                # rew_obs_dist = - (d_safe - min_dist)
-                # rew_obs_dist = min_dist / d_safe
-
+                #--- OBSTACLE APPROACH PENALTY:
                 rew_obs_dist = min((min_dist / (self.min_dist_last + 1e-6) - 1), 0)
-                # rew_obs_dist = min((min_dist - self.min_dist_last),0) * (d_safe - min_dist) / d_safe
-                # rew_obs_dist = -1 if min_dist <= self.min_dist_last else 0
 
-                # REWARD FOR NOT BEING ALIGNED WITH OBSTACLES
-                # if the index of the minimum LiDAR ray (group) is not near the beginning or the end of the lidar_obs\
-                lidar_idx_threshold = 4
-                if min_dist_idx >= lidar_idx_threshold and min_dist_idx < self.n_ray_groups-lidar_idx_threshold and v_lin >= 0.05:
+                # REWARD FOR NOT BEING ALIGNED WITH OBSTACLES:
+                if min_dist_idx >= self.lidar_idx_threshold and min_dist_idx < self.n_ray_groups - self.lidar_idx_threshold and v_lin >= 0.05:
                     rew_obs_align = 1
                 else:
-                    # if the obstacle is near the front of the agent, but the agent is rotating away correctly
-                    if (min_dist_idx < lidar_idx_threshold and v_ang > 0) or (min_dist_idx >= self.n_ray_groups-lidar_idx_threshold and v_ang < 0):
+                    if (min_dist_idx < self.lidar_idx_threshold and v_ang > 0) or (min_dist_idx >= self.n_ray_groups - self.lidar_idx_threshold and v_ang < 0):
                         rew_obs_align = min(1, np.abs(v_ang))
-                        # rew_obs_align = 1
                     else:
                         rew_obs_align = 0
 
@@ -639,10 +617,7 @@ class Nav2D(MujocoEnv):
             act_diff = np.abs(action - self.action_last)          # penalize both abrupt changes in linear and angular velocities
             rew_act_diff = -0.5 * np.sum(act_diff ** 2)
 
-            # act_diff = np.abs(action[0]- self.action_last[0])       # penalize only abrupt changes in linear velocity
-            # rew_act_diff = -0.1 * act_diff
-            
-            #--- PENALIZE STALLING (current action):
+            #--- PENALIZE STALLING:
             if abs(action[0]) <= 0.05:
                 rew_time = 2 * self.rew_time
             else:
@@ -656,7 +631,7 @@ class Nav2D(MujocoEnv):
             self.rew_obs_dist_scaled        = self.rew_obs_dist_scale       * rew_obs_dist
             self.rew_obs_align_scaled       = self.rew_obs_align_scale      * rew_obs_align
 
-            #--- TOTAL REWARD TERM:
+            #--- TOTAL REWARD:
             rew = 0
             rew += self.rew_dist_scaled + self.rew_head_scaled
             rew += self.rew_dist_approach_scaled + self.rew_head_approach_scaled
