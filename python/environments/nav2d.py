@@ -27,7 +27,7 @@ class Nav2D(MujocoEnv):
                  randomization_options: dict[str, float] | None = None,
                  obstacle_options: dict[str, int] = {"n_obstacles": 0},
                  visual_options: dict[int, bool] | None = None,
-                 n_ray_groups: int = 16,
+                 n_ray_groups: int = 18,
                  is_eval: bool = False
                 ):
         ''' class constructor to initialize the environment (Mujoco model and data), the observation space, and renderer
@@ -109,14 +109,15 @@ class Nav2D(MujocoEnv):
 
         # --- REWARD SCALE INITIALIZATION
         self.reward_scale_options       = reward_scale_options
-        self.rew_dist_scale             = reward_scale_options.get("rew_dist_scale", 1)             if reward_scale_options else 1
-        self.rew_dist_approach_scale    = reward_scale_options.get("rew_dist_approach_scale", 125)  if reward_scale_options else 125
-        self.rew_head_scale             = reward_scale_options.get("rew_head_scale", 1)             if reward_scale_options else 1
-        self.rew_head_approach_scale    = reward_scale_options.get("rew_head_approach_scale", 125)  if reward_scale_options else 125
-        self.rew_obs_dist_scale         = reward_scale_options.get("rew_obs_dist_scale", 125)       if reward_scale_options else 125
-        self.rew_goal_scale             = reward_scale_options.get("rew_goal_scale", 5000)          if reward_scale_options else 5000
-        self.rew_obst_scale             = reward_scale_options.get("rew_obst_scale", -1000)         if reward_scale_options else -1000
-        self.rew_time                   = reward_scale_options.get("rew_time", -0.25)               if reward_scale_options else -0.25
+        self.rew_dist_scale             = reward_scale_options.get("rew_dist_scale", 0)             if reward_scale_options else 0
+        self.rew_dist_approach_scale    = reward_scale_options.get("rew_dist_approach_scale", 200)  if reward_scale_options else 200
+        self.rew_head_scale             = reward_scale_options.get("rew_head_scale", 0)             if reward_scale_options else 0
+        self.rew_head_approach_scale    = reward_scale_options.get("rew_head_approach_scale", 200)  if reward_scale_options else 200
+        self.rew_obs_dist_scale         = reward_scale_options.get("rew_obs_dist_scale", 0)         if reward_scale_options else 0
+        self.rew_obs_align_scale        = reward_scale_options.get("rew_obs_align_scale", 0.5)      if reward_scale_options else 0.5
+        self.rew_goal_scale             = reward_scale_options.get("rew_goal_scale", 3000)          if reward_scale_options else 3000
+        self.rew_obst_scale             = reward_scale_options.get("rew_obst_scale", -200)          if reward_scale_options else -200
+        self.rew_time                   = reward_scale_options.get("rew_time", -0.2)                if reward_scale_options else -0.5
 
         # intialize the scaled reward components
         self.rew_head_scaled = 0
@@ -124,6 +125,7 @@ class Nav2D(MujocoEnv):
         self.rew_dist_scaled = 0
         self.rew_dist_approach_scaled = 0
         self.rew_obs_dist_scaled = 0
+        self.rew_obs_align_scaled = 0
 
         # AGENT/TASK INITIALIZATION
         # --- define the uninitialized location of the agent and the target
@@ -245,8 +247,8 @@ class Nav2D(MujocoEnv):
         high[self.obs_dgoal_idx]   = self.dmax
 
         # velocity bounds
-        low[[self.obs_v_lin_idx, self.obs_v_ang_idx]]  = self.action_low * np.array([self.linear_scale, self.angular_scale], dtype = np.float32)
-        high[[self.obs_v_lin_idx, self.obs_v_ang_idx]] = self.action_high * np.array([self.linear_scale, self.angular_scale], dtype = np.float32)
+        low[[self.obs_v_lin_idx, self.obs_v_ang_idx]]  = self.action_low
+        high[[self.obs_v_lin_idx, self.obs_v_ang_idx]] = self.action_high
         
         # LiDAR bounds
         low[self.obs_lidar_0_idx:]  = 0.0
@@ -544,7 +546,8 @@ class Nav2D(MujocoEnv):
         lidar_obs               = nobs[self.obs_lidar_0_idx:]
 
         # get the minimum LiDAR reading:
-        min_dist = min(lidar_obs)
+        min_dist = np.min(lidar_obs)
+        min_dist_idx = np.argmin(lidar_obs)
 
         # get the difference between the agents current heading, and the required heading:
         heading  = np.arctan2(s_theta, c_theta) % (2 * np.pi)
@@ -553,10 +556,10 @@ class Nav2D(MujocoEnv):
 
         # 3. termination conditions: 
         # when the agent is close to the goal:
-        distance_cond = d_goal < self.distance_threshold
+        distance_cond = d_goal <= self.distance_threshold
 
         # when the agent is close to obstacles:
-        obstacle_cond = np.min(lidar_obs) < self.obstacle_threshold
+        obstacle_cond = min_dist <= self.obstacle_threshold
         
         # when the agent has not reduced the d_goal for N steps, where N is 200:
         # if d_goal > self.d_goal_last: 
@@ -579,9 +582,9 @@ class Nav2D(MujocoEnv):
             info["is_success"]          = bool(distance_cond)        # if successful
             info["obstacle_cond"]       = bool(obstacle_cond)        # if not successful
 
-            # these are the progress conditions:
-            info["dist_progress_cond"]  = (self.dist_progress_count >= self.progress_threshold)
-            info["head_progress_cond"]  = (self.head_progress_count >= self.progress_threshold)
+            # # these are the progress conditions:
+            # info["dist_progress_cond"]  = (self.dist_progress_count >= self.progress_threshold)
+            # info["head_progress_cond"]  = (self.head_progress_count >= self.progress_threshold)
 
             # flag for collision:
             self.collision = bool(obstacle_cond)
@@ -592,65 +595,100 @@ class Nav2D(MujocoEnv):
         elif obstacle_cond:
             rew = self.rew_obst_scale
         else:
-            #--- DISTANCE REWARD:
-            # this reward term incentivizes closing the distance between the agent and the goal:
-            # rew_dist = (self.d_init - d_goal) / self.d_init         # distance reward relative to the starting state 
-            # self.rew_dist_scaled = self.rew_dist_scale * rew_dist
+            # when not near and obstacle, focus on moving toward the goal
+            d_safe = 0.5
+            if min_dist >= d_safe:
+                #--- DISTANCE APPROACH REWARD:
+                # this reward term incentivizes approaching the goal, and rewards 0 otherwise:
+                rew_dist_approach = max((self.d_goal_last - d_goal), 0)
 
-            #--- DISTANCE APPROACH REWARD:
-            # this reward term incentivizes approaching the goal, and rewards 0 otherwise:
-            rew_dist_approach = max((self.d_goal_last - d_goal), 0)
-            self.rew_dist_approach_scaled = rew_dist_approach * self.rew_dist_approach_scale
+                #--- HEADING APPROACH REWARD:
+                # this reward term incentivizes approaching the required heading, and rewards 0 otherwise
+                rew_head_approach = max((self.prev_abs_diff - abs_diff), 0) if action[0] >= 0.05 else 0
 
-            #---  BASE HEADING REWARD:
-            # penalize based on the absolute difference in heading:
-            # if action[0] >= 0.05:                 # gated by forward velocity
-            # if (self.d_goal_last - d_goal) > 1e-5:  # gated by making progress toward the goal 
-            #     rew_head = 1.0 - np.tanh(abs_diff / np.pi)
+                rew_obs_dist = 0
+                rew_obs_align = 0
+            
+            # when near an obstacle, focus on moving away
+            else:
+                # PENALTY FOR APPROACHING OBSTACLES
+                rew_dist_approach = 0
+                rew_head_approach = 0
+                # rew_obs_dist = - (d_safe - min_dist)
+                # rew_obs_dist = min_dist / d_safe
 
-            #     # bonus reward for being within +/- 5 degree of the desired trajectory:
-            #     # angle_threshold_rad = np.deg2rad(2.5)
-            #     # if abs_diff <= angle_threshold_rad:
-            #     #     rew_head += 1 - 1 / angle_threshold_rad * abs_diff
-            # else: rew_head = 0
+                rew_obs_dist = min((min_dist / (self.min_dist_last + 1e-6) - 1), 0)
+                # rew_obs_dist = min((min_dist - self.min_dist_last),0) * (d_safe - min_dist) / d_safe
+                # rew_obs_dist = -1 if min_dist <= self.min_dist_last else 0
 
-            # scale reward:
-            # self.rew_head_scaled = self.rew_head_scale * rew_head
+                # REWARD FOR NOT BEING ALIGNED WITH OBSTACLES
+                # if the index of the minimum LiDAR ray (group) is not near the beginning or the end of the lidar_obs\
+                lidar_idx_threshold = 4
+                if min_dist_idx >= lidar_idx_threshold and min_dist_idx < self.n_ray_groups-lidar_idx_threshold and v_lin >= 0.05:
+                    rew_obs_align = 1
+                else:
+                    # if the obstacle is near the front of the agent, but the agent is rotating away correctly
+                    if (min_dist_idx < lidar_idx_threshold and v_ang > 0) or (min_dist_idx >= self.n_ray_groups-lidar_idx_threshold and v_ang < 0):
+                        rew_obs_align = min(1, np.abs(v_ang))
+                        # rew_obs_align = 1
+                    else:
+                        rew_obs_align = 0
 
-            #--- HEADING APPROACH REWARD:
-            # this reward term incentivizes approaching the required heading, and rewards 0 otherwise
-            rew_head_approach = max((self.prev_abs_diff - abs_diff), 0)
-            self.rew_head_approach_scaled = self.rew_head_approach_scale * rew_head_approach
 
-            #--- CHANGE IN MINIMUM OBSTACLE DISTANCE REWARD TERM:
-            rew_obs_dist_change = max((self.min_dist_last - min_dist), 0)
-            self.rew_obs_dist_change_scaled = self.rew_obs_dist_scale * rew_obs_dist_change
-            # min_dist = min(lidar_obs)
-            # rew_obs_dist = min_dist / self.dmax
-            # self.rew_obs_dist_scaled = 
+            #--- PENALIZE ABRUPT CHANGES IN VELOCITY
+            act_diff = np.abs(action - self.action_last)          # penalize both abrupt changes in linear and angular velocities
+            rew_act_diff = -0.5 * np.sum(act_diff ** 2)
+
+            # act_diff = np.abs(action[0]- self.action_last[0])       # penalize only abrupt changes in linear velocity
+            # rew_act_diff = -0.1 * act_diff
+            
+            #--- PENALIZE STALLING (current action):
+            if abs(action[0]) <= 0.05:
+                rew_time = 2 * self.rew_time
+            else:
+                rew_time = self.rew_time
+
+            # Scaling 
+            # self.rew_dist_scaled            = self.rew_dist_scale           * rew_dist        
+            self.rew_dist_approach_scaled   = self.rew_dist_approach_scale  * rew_dist_approach
+            # self.rew_head_scaled            = self.rew_head_scale           * rew_head
+            self.rew_head_approach_scaled   = self.rew_head_approach_scale  * rew_head_approach
+            self.rew_obs_dist_scaled        = self.rew_obs_dist_scale       * rew_obs_dist
+            self.rew_obs_align_scaled       = self.rew_obs_align_scale      * rew_obs_align
 
             #--- TOTAL REWARD TERM:
-            rew = self.rew_head_scaled + self.rew_head_approach_scaled + self.rew_dist_scaled + self.rew_dist_approach_scaled + self.rew_time + self.rew_obs_dist_change_scaled
+            rew = 0
+            rew += self.rew_dist_scaled + self.rew_head_scaled
+            rew += self.rew_dist_approach_scaled + self.rew_head_approach_scaled
+            rew += self.rew_obs_dist_scaled + self.rew_obs_align_scaled
+            rew += rew_act_diff
+            rew += rew_time
 
             # print to user:
             if self.render_mode == "human":
-                # observation debug
-                print(f" @ episode {self.episode_counter} | "
-                      f"(dx,dy)=({dx: 4.2f},{dy: 4.2f}) | d_goal={d_goal:5.3f}  | "
-                      fr"θ={heading/np.pi*180: 6.2f} | Ψ={bearing/np.pi*180: 6.2f} | "
-                      f"(vx, vz)_(t-1)=({v_lin: 5.3f},{v_ang: 5.3f}) | "
-                      f"(vx, vz)_t={action[0]: 5.3f},{action[1]: 5.3f}          ", end="\r")
+                # # observation debug
+                # print(f" @ episode {self.episode_counter} | "
+                #       f"(dx,dy)=({dx: 4.2f},{dy: 4.2f}) | d_goal={d_goal:5.3f}  | "
+                #       fr"θ={heading/np.pi*180: 6.2f} | Ψ={bearing/np.pi*180: 6.2f} | "
+                #       f"(vx, vz)_(t-1)=({v_lin: 5.3f},{v_ang: 5.3f}) | "
+                #       f"(vx, vz)_t={action[0]: 5.3f},{action[1]: 5.3f}       ", end="\r")
 
                 # # lidar debug
                 # print(lidar_obs)
 
                 # reward debug
                 print(f" @ episode {self.episode_counter} | "
-                      f"rew_dist: {self.rew_dist_scaled: 6.4f} | "
-                      f"rew_dist_app: {self.rew_dist_approach_scaled: 6.4f} | "
-                      f"rew_head: {self.rew_head_scaled: 6.4f} | "
-                      f"rew_obs_dist: {self.rew_obs_dist_change_scaled: 6.4f} |"
-                      f"rew_head_app: {self.rew_head_approach_scaled: 6.4f}        ",
+                      f"min_dist: {min_dist: 5.3f} in group {min_dist_idx:2d} | "
+                      f"action: ({action[0]: 5.3f}, {action[1]: 5.3f}) | "
+                    #   f"rew_dist: {self.rew_dist_scaled: 5.3f} | "
+                      f"r_dist_app: {self.rew_dist_approach_scaled: 5.3f} | "
+                    #   f"rew_head: {self.rew_head_scaled: 5.3f} | "
+                      f"r_head_app: {self.rew_head_approach_scaled: 5.3f} | "
+                      f"r_obs_dist: {self.rew_obs_dist_scaled: 5.3f} | "
+                      f"r_obs_align: {self.rew_obs_align_scaled: 5.3f} | "
+                      f"rew_act_diff: {rew_act_diff: 5.3f} | "
+                      f"r_time: {self.rew_time: 4.2f} | "
+                      f"r_total: {rew: 5.3f}  ",
                       end="\r")
                 pass
                 
