@@ -3,7 +3,13 @@
   "dockerFile": "Dockerfile",
   "runArgs": [
     "--privileged",
-    "--network=host"
+    "--network=host",
+    "--gpus","all",
+    "--device=/dev/dri:/dev/dri",
+    "--env=DISPLAY=${localEnv:DISPLAY}",
+    "--volume=/tmp/.X11-unix:/tmp/.X11-unix",
+    "--env=NVIDIA_VISIBLE_DEVICES=all",
+    "--env=NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics,video,display"
   ],
   "workspaceMount": "source=${localWorkspaceFolder},target=/${localWorkspaceFolderBasename},type=bind",
   "workspaceFolder": "/${localWorkspaceFolderBasename}",

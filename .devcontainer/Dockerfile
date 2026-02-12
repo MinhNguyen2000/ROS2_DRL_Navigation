@@ -56,11 +56,15 @@ RUN apt-get update && \
     echo "$USERNAME ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME && \
     chmod 0440 /etc/sudoers.d/$USERNAME
 
+# Add user to video group to allow access to webcam
+RUN usermod --append --groups video $USERNAME
+
+# Add user to render group for Ignition to access moden EGL/render nodes
+RUN groupadd -g 110 render || true \
+    && usermod --append --groups render $USERNAME
+
 # Switch from root to user
 USER $USERNAME
-
-# Add user to video group to allow access to webcam
-RUN sudo usermod --append --groups video $USERNAME
 
 # Update all packages
 RUN sudo apt update && sudo apt upgrade -y
