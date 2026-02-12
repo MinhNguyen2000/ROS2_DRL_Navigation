@@ -1,0 +1,224 @@
+<?xml version = "1.0"?>
+<robot xmlns:xacro = "http://www.ros.org/wiki/xacro">
+    <!-- PROPERTIES -->
+    <xacro:property name = "d" value = "1.0"/>          <!-- scalar used for damping -->
+    <xacro:property name = "o" value = "0.0"/>          <!-- tuneable offset for wheel collision -->
+    <xacro:property name = "c_mass" value = "2.415"/>   <!-- chassis mass in kg -->
+    <xacro:property name = "w_mass" value = "0.058"/>   <!-- wheel mass in kg -->
+
+    <!-- MATERIALS -->
+    <material name = "black">
+        <color rgba = "0.1 0.1 0.1 1"/>
+    </material>
+
+    <material name = "gray">
+        <color rgba = "0.83 0.83 0.83 1"/>
+    </material>
+
+    <!-- MACROS -->
+    <xacro:macro name = "cylinder_inertia" params = "mass radius length">
+        <inertia
+            ixx = "${a * mass * (3 * radius**2 + length**2) / 12}"
+            ixy = "0"
+            ixz = "0"
+            iyy = "${a * mass * (3 * radius**2 + length**2) / 12}"
+            iyz = "0"
+            izz = "${a * mass * radius**2 / 12}"
+        />
+    </xacro:macro>
+
+    <xacro:macro name = "box_inertia" params = "mass w h d">
+        <inertia
+            ixx = "${a * mass * (h**2 + d**2) / 12}"
+            ixy = "0"
+            ixz = "0"
+            iyy = "${a * mass * (w**2 + h**2) / 12}"
+            iyz = "0"
+            izz = "${a * mass * (w**2 + d**2) / 12}"
+        />
+    </xacro:macro>
+
+    <!-- START -->
+    <!-- base link -->
+    <link name = "${prefix}_base_link">
+    </link>
+
+    <!-- chassis link -->
+    <link name = "${prefix}_chassis_link">
+        <visual>
+            <origin xyz = "0 0 0" rpy = "0 0 0"/>
+            <geometry>
+                <mesh filename = "file://$(find agent_bringup)/meshes/chassis.STL"/>
+            </geometry>
+            <material name = "black"/>
+        </visual>
+
+        <collision>
+            <origin xyz = "0.00475 0 0.004" rpy = "0 0 0"/>
+            <geometry>
+                <box size = "0.2235 0.139 0.1165"/>
+            </geometry>
+        </collision>
+
+        <inertial>
+            <mass value = "${c_mass}"/>
+            <xacro:box_inertia
+                mass = "${c_mass}"
+                w = "0.2235"
+                h = "0.1165"
+                d = "0.139"
+            />
+        </inertial>
+    </link>
+
+    <!-- chassis link to base link joint -->
+    <joint name = "${prefix}_base_joint" type = "fixed">
+        <parent link = "${prefix}_base_link"/>
+        <child link = "${prefix}_chassis_link"/>
+        <origin xyz = "0 0 0.07115" rpy = "0 0 0"/> <!-- origin offset of 0.07115 -->
+    </joint>
+
+    <!-- front right wheel link -->
+    <link name = "${prefix}_front_right_wheel_link">
+        <visual>
+            <origin xyz = "0 0 0" rpy = "1.570796 0 0"/>
+            <geometry>
+                <mesh filename = "file://$(find agent_bringup)/meshes/front_right_wheel.STL"/>
+            </geometry>
+            <material name = "black"/>
+        </visual>
+
+        <collision>
+            <origin xyz = "0 0 ${-o}" rpy = "1.570796 0 0"/>
+            <geometry>
+                <cylinder radius = "0.0325" length = "0.03035"/>
+            </geometry>
+        </collision>
+
+        <inertial>
+            <mass value = "${w_mass}"/>
+            <xacro:cylinder_inertia
+                mass = "${w_mass}"
+                radius = "0.0325"
+                length = "0.03035"
+            />
+        </inertial>
+    </link>
+
+    <!-- front right wheel to chassis joint -->
+    <joint name = "${prefix}_front_right_joint" type = "continuous">
+        <origin xyz = "0.08 -0.08475 -0.0389" rpy = "0 0 0"/>
+        <parent link = "${prefix}_chassis_link"/>
+        <child link = "${prefix}_front_right_wheel_link"/>
+        <axis xyz = "0 1 0" rpy = "0 0 0"/>
+        <dynamics damping = "${d}"/>
+    </joint>
+
+    <!-- front left wheel link -->
+    <link name = "${prefix}_front_left_wheel_link">
+        <visual>
+            <origin xyz = "0 0 0" rpy = "1.570796 0 0"/>
+            <geometry>
+                <mesh filename = "file://$(find agent_bringup)/meshes/front_left_wheel.STL"/>
+            </geometry>
+            <material name = "black"/>
+        </visual>
+
+        <collision>
+            <origin xyz = "0 0 ${-o}" rpy = "1.570796 0 0"/>
+            <geometry>
+                <cylinder radius = "0.0325" length = "0.03035"/>
+            </geometry>
+        </collision>
+
+        <inertial>
+            <mass value = "${w_mass}"/>
+            <xacro:cylinder_inertia
+                mass = "${w_mass}"
+                radius = "0.0325"
+                length = "0.03035"
+            />
+        </inertial>
+    </link>
+
+    <!-- front left wheel to chassis joint -->
+    <joint name = "${prefix}_front_left_joint" type = "continuous">
+        <origin xyz = "0.08 0.08475 -0.0389" rpy = "0 0 0"/>
+        <parent link = "${prefix}_chassis_link"/>
+        <child link = "${prefix}_front_left_wheel_link"/>
+        <axis xyz = "0 1 0" rpy = "0 0 0"/>
+        <dynamics damping = "${d}"/>
+    </joint>
+
+    <!-- back right wheel link -->
+    <link name = "${prefix}_back_right_wheel_link">
+        <visual>
+            <origin xyz = "0 0 0" rpy = "1.570796 0 0"/>
+            <geometry>
+                <mesh filename = "file://$(find agent_bringup)/meshes/back_right_wheel.STL"/>
+            </geometry>
+            <material name = "black"/>
+        </visual>
+
+        <collision>
+            <origin xyz = "0 0 ${-o}" rpy = "1.570796 0 0"/>
+            <geometry>
+                <cylinder radius = "0.0325" length = "0.03035"/>
+            </geometry>
+        </collision>
+
+        <inertial>
+            <mass value = "${w_mass}"/>
+            <xacro:cylinder_inertia
+                mass = "${w_mass}"
+                radius = "0.0325"
+                length = "0.03035"
+            />
+        </inertial>
+    </link>
+
+    <!-- back right wheel to chassis joint -->
+    <joint name = "${prefix}_back_right_joint" type = "continuous">
+        <origin xyz = "-0.08 -0.08475 -0.0389" rpy = "0 0 0"/>   <!-- z was -0.03946 -->
+        <parent link = "${prefix}_chassis_link"/>
+        <child link = "${prefix}_back_right_wheel_link"/>
+        <axis xyz = "0 1 0" rpy = "0 0 0"/>
+        <dynamics damping = "${d}"/>
+    </joint>
+
+    <!-- back left wheel link -->
+    <link name = "${prefix}_back_left_wheel_link">
+        <visual>
+            <origin xyz = "0 0 0" rpy = "1.570796 0 0"/>
+            <geometry>
+                <mesh filename = "file://$(find agent_bringup)/meshes/back_left_wheel.STL"/>
+            </geometry>
+            <material name = "black"/>
+        </visual>
+
+        <collision>
+            <origin xyz = "0 0 ${-o}" rpy = "1.570796 0 0"/>
+            <geometry>
+                <cylinder radius = "0.0325" length = "0.03035"/>
+            </geometry>
+        </collision>
+
+        <inertial>
+            <mass value = "${w_mass}"/>
+            <xacro:cylinder_inertia
+                mass = "${w_mass}"
+                radius = "0.0325"
+                length = "0.03035"
+            />
+        </inertial>
+    </link>
+
+    <!-- back left wheel to chassis joint -->
+    <joint name = "${prefix}_back_left_joint" type = "continuous">
+        <origin xyz = "-0.08 0.08475 -0.0389" rpy = "0 0 0"/> <!-- z was -0.03954 -->
+        <parent link = "${prefix}_chassis_link"/>
+        <child link = "${prefix}_back_left_wheel_link"/>
+        <axis xyz = "0 1 0" rpy = "0 0 0"/>
+        <dynamics damping = "${d}"/>
+    </joint>
+</robot>
