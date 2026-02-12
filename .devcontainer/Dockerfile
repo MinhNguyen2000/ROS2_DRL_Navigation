@@ -1,5 +1,46 @@
 FROM osrf/ros:humble-desktop-full
 
+# Install system tools
+RUN apt-get update && apt-get install -y \
+  # iproute2 and iputils-ping to perform "ip addr" and "ping", 
+  iproute2 \
+  iputils-ping \
+  # joystick mapping relay from robot to this container on the dev machine
+  joystick \
+  nano \
+&& rm -rf /var/lib/apt/lists/*
+
+# Install ROS2 nodes/libraries
+RUN apt-get update && apt-get install -y \
+    # test the ROS communication between the robot's container and dev machine's container
+    ros-${ROS_DISTRO}-demo-nodes-cpp \
+    ros-${ROS_DISTRO}-demo-nodes-py \
+    ros-${ROS_DISTRO}-ros2-control \
+    ros-${ROS_DISTRO}-ros2-controllers \
+    ros-${ROS_DISTRO}-xacro \
+    ros-${ROS_DISTRO}-ros-gz* \
+    ros-${ROS_DISTRO}-gz-ros2-control \
+    ros-${ROS_DISTRO}-joint-state-publisher-gui \
+    # ros-${ROS_DISTRO}-turtlesim \
+    ros-${ROS_DISTRO}-slam-toolbox \
+    ros-${ROS_DISTRO}-robot-localization \
+    ros-${ROS_DISTRO}-joy \
+    ros-${ROS_DISTRO}-joy-teleop \
+    ros-${ROS_DISTRO}-tf-transformations \
+    ros-${ROS_DISTRO}-gazebo-ros \
+    ros-${ROS_DISTRO}-gazebo-ros-pkgs \
+    # ros-${ROS_DISTRO}-gazebo-ros2-control \
+    ros-${ROS_DISTRO}-plotjuggler \
+    ros-${ROS_DISTRO}-plotjuggler-ros \
+    # Handle Twist/TwistStamped messages
+    ros-${ROS_DISTRO}-twist-mux \
+    ros-${ROS_DISTRO}-twist-stamper \
+    # Nav2 stack
+    ros-${ROS_DISTRO}-navigation2 \
+    ros-${ROS_DISTRO}-nav2-bringup \
+    ros-${ROS_DISTRO}-rqt-tf-tree  && \
+    rm -rf /var/lib/apt/lists/*
+
 # Add ubuntu user with same UID and GID as your host system, if it doesn't already exist
 # Since Ubuntu 24.04, a non-root user is created by default with the name vscode and UID=1000
 ARG USERNAME=ubuntu
