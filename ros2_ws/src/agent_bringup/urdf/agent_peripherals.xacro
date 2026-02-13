@@ -6,7 +6,7 @@
         <visual>
             <origin xyz = "0 0 0" rpy = "1.570796 0 1.570796"/>
             <geometry>
-                <mesh filename = "file://$(find mrs_robot_launcher)/meshes/lidar.STL" scale = "0.001 0.001 0.001"/>
+                <mesh filename = "file://$(find agent_bringup)/meshes/lidar.STL" scale = "0.001 0.001 0.001"/>
             </geometry>
             <material name = "black"/>
         </visual>

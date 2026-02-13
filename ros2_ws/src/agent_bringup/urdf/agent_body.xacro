@@ -1,6 +1,7 @@
 <?xml version = "1.0"?>
 <robot xmlns:xacro = "http://www.ros.org/wiki/xacro">
     <!-- PROPERTIES -->
+    <xacro:property name = "a" value = "1.0"/>          <!-- scalar used for inertia-->
     <xacro:property name = "d" value = "1.0"/>          <!-- scalar used for damping -->
     <xacro:property name = "o" value = "0.0"/>          <!-- tuneable offset for wheel collision -->
     <xacro:property name = "c_mass" value = "2.415"/>   <!-- chassis mass in kg -->
