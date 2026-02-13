@@ -16,6 +16,10 @@
         <color rgba = "0.83 0.83 0.83 1"/>
     </material>
 
+    <material name = "green">
+        <color rgba = "0 1 0 1"/>
+    </material>
+
     <!-- MACROS -->
     <xacro:macro name = "cylinder_inertia" params = "mass radius length">
         <inertia
@@ -51,7 +55,7 @@
             <geometry>
                 <mesh filename = "file://$(find agent_bringup)/meshes/chassis.STL"/>
             </geometry>
-            <material name = "black"/>
+            <material name = "green"/>
         </visual>
 
         <collision>
@@ -86,7 +90,7 @@
             <geometry>
                 <mesh filename = "file://$(find agent_bringup)/meshes/front_right_wheel.STL"/>
             </geometry>
-            <material name = "black"/>
+            <material name = "gray"/>
         </visual>
 
         <collision>
@@ -122,7 +126,7 @@
             <geometry>
                 <mesh filename = "file://$(find agent_bringup)/meshes/front_left_wheel.STL"/>
             </geometry>
-            <material name = "black"/>
+            <material name = "gray"/>
         </visual>
 
         <collision>
@@ -158,7 +162,7 @@
             <geometry>
                 <mesh filename = "file://$(find agent_bringup)/meshes/back_right_wheel.STL"/>
             </geometry>
-            <material name = "black"/>
+            <material name = "gray"/>
         </visual>
 
         <collision>
@@ -194,7 +198,7 @@
             <geometry>
                 <mesh filename = "file://$(find agent_bringup)/meshes/back_left_wheel.STL"/>
             </geometry>
-            <material name = "black"/>
+            <material name = "gray"/>
         </visual>
 
         <collision>
