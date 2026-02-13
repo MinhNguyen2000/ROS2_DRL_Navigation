@@ -97,6 +97,7 @@
             <origin xyz = "0 0 ${-o}" rpy = "1.570796 0 0"/>
             <geometry>
                 <cylinder radius = "0.0325" length = "0.03035"/>
+                <!-- <sphere radius = "0.0325"/> -->
             </geometry>
         </collision>
 
@@ -117,6 +118,7 @@
         <child link = "${prefix}_front_right_wheel_link"/>
         <axis xyz = "0 1 0" rpy = "0 0 0"/>
         <dynamics damping = "${d}"/>
+        <limit effort = "0.05" velocity = "10.0"/>
     </joint>
 
     <!-- front left wheel link -->
@@ -133,6 +135,7 @@
             <origin xyz = "0 0 ${-o}" rpy = "1.570796 0 0"/>
             <geometry>
                 <cylinder radius = "0.0325" length = "0.03035"/>
+                <!-- <sphere radius = "0.0325"/> -->
             </geometry>
         </collision>
 
@@ -153,6 +156,7 @@
         <child link = "${prefix}_front_left_wheel_link"/>
         <axis xyz = "0 1 0" rpy = "0 0 0"/>
         <dynamics damping = "${d}"/>
+        <limit effort = "0.05" velocity = "10.0"/>
     </joint>
 
     <!-- back right wheel link -->
@@ -169,6 +173,7 @@
             <origin xyz = "0 0 ${-o}" rpy = "1.570796 0 0"/>
             <geometry>
                 <cylinder radius = "0.0325" length = "0.03035"/>
+                <!-- <sphere radius = "0.0325"/> -->
             </geometry>
         </collision>
 
@@ -189,6 +194,7 @@
         <child link = "${prefix}_back_right_wheel_link"/>
         <axis xyz = "0 1 0" rpy = "0 0 0"/>
         <dynamics damping = "${d}"/>
+        <limit effort = "0.05" velocity = "10.0"/>
     </joint>
 
     <!-- back left wheel link -->
@@ -205,6 +211,7 @@
             <origin xyz = "0 0 ${-o}" rpy = "1.570796 0 0"/>
             <geometry>
                 <cylinder radius = "0.0325" length = "0.03035"/>
+                <!-- <sphere radius = "0.0325"/> -->
             </geometry>
         </collision>
 
@@ -225,5 +232,6 @@
         <child link = "${prefix}_back_left_wheel_link"/>
         <axis xyz = "0 1 0" rpy = "0 0 0"/>
         <dynamics damping = "${d}"/>
+        <limit effort = "0.05" velocity = "10.0"/>
     </joint>
 </robot>
