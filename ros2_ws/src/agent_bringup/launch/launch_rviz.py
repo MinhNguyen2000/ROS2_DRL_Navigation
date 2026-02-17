@@ -32,9 +32,16 @@ def generate_launch_description():
         description = "Whether or not to launch joint state publisher with the GUI, defaulting to false"
     )
 
+    use_ros_control = LaunchConfiguration("use_ros_control")
+    use_ros_control_arg = DeclareLaunchArgument(
+        "use_ros_control",
+        default_value = "false",
+        description = "If true, control the agent using ros2_control, otherwise, use Gazebo plugins. Defaults to false"
+    )
+
     # set the required parameters:
     agent_name = "agent"
-    robot_description = Command(["xacro ", xacro_path, " agent_name:=", agent_name])
+    robot_description = Command(["xacro ", xacro_path, " agent_name:=", agent_name, " use_ros_control:=", use_ros_control])
     rsp_parameters = {"robot_description": ParameterValue(robot_description, value_type = str), "use_sim_time" : use_sim_time}
 
     # define the nodes to be launched:
@@ -77,6 +84,7 @@ def generate_launch_description():
     return LaunchDescription([
         use_sim_time_arg,
         use_gui_arg,
+        use_ros_control_arg,
         rsp,
         jsp,
         jsp_gui,
