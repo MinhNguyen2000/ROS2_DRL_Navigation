@@ -23,7 +23,7 @@ def generate_launch_description():
     # define the nodes to be launched:
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([gazebo_launch_file_dir]),
-        launch_arguments={"gz_args": ["-r -v1 ", world]}.items()
+        launch_arguments={"gz_args": ["-r -v4 ", world]}.items()
     )
 
     return LaunchDescription([
