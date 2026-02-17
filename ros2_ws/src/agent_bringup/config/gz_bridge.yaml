@@ -1,8 +1,25 @@
-# port the clock from gazebo to ros:
-- ros_topic_name: "clock"
-  gz_topic_name: "clock"
-  ros_type_name: "rosgraph_msgs/msg/Clock"
-  gz_type_name: "gz.msgs.Clock"
-  direction: GZ_TO_ROS
-
-# command velocity that we are subscribing to:
+- direction: GZ_TO_ROS
+  gz_topic_name: clock
+  gz_type_name: gz.msgs.Clock
+  ros_topic_name: clock
+  ros_type_name: rosgraph_msgs/msg/Clock
+- direction: ROS_TO_GZ
+  gz_topic_name: cmd_vel
+  gz_type_name: gz.msgs.Twist
+  ros_topic_name: cmd_vel
+  ros_type_name: geometry_msgs/msg/TwistStamped
+- direction: GZ_TO_ROS
+  gz_topic_name: odom
+  gz_type_name: gz.msgs.Odometry
+  ros_topic_name: odom
+  ros_type_name: nav_msgs/msg/Odometry
+- direction: GZ_TO_ROS
+  gz_topic_name: tf
+  gz_type_name: gz.msgs.Pose_V
+  ros_topic_name: tf
+  ros_type_name: tf2_msgs/msg/TFMessage
+- direction: GZ_TO_ROS
+  gz_topic_name: joint_states
+  gz_type_name: gz.msgs.Model
+  ros_topic_name: agent/joint_states
+  ros_type_name: sensor_msgs/msg/JointState
