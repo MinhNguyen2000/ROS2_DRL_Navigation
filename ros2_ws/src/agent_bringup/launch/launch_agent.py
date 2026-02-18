@@ -12,6 +12,7 @@ from ament_index_python.packages import get_package_share_directory
 # - robot_state_publisher
 # - gazebo
 # - spawner
+# - ros_gz_bridge
 
 def generate_launch_description():
     # set the required paths:
@@ -55,11 +56,7 @@ def generate_launch_description():
     for entry in yaml_params:
         # name_space the joint_states:
         if entry.get("gz_topic_name") == "joint_states":
-            entry["ros_topic_name"] = f"{agent_name}/joint_states"
-
-        # # unflatten the tf topic in gazebo:
-        # if entry.get("gz_topic_name") == "tf":
-        #     entry["gz_topic_name"] = f"model/{agent_name}/tf"
+            entry["ros_topic_name"] = f"/{agent_name}/joint_states"
 
     # write back to file:
     with open(bridge_path, "w") as f:

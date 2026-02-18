@@ -33,6 +33,7 @@
     <!-- PLUGINS -->
     <xacro:unless value = "$(arg use_ros_control)">
         <gazebo>
+            <!-- plugin for doing the control -->
             <plugin name = "ignition::gazebo::systems::MecanumDrive" filename = "ignition-gazebo-mecanum-drive-system">
                 <!-- information about the robot -->
                 <front_left_joint>${prefix}_front_left_joint</front_left_joint>
@@ -47,12 +48,24 @@
                 <!-- topic information -->
                 <odom_publish_frequency>60</odom_publish_frequency>
                 <topic>cmd_vel</topic>
-                <frame_id>odom</frame_id>
-                <child_frame_id>${prefix}_base_link</child_frame_id>
                 <odom_topic>odom</odom_topic>
                 <tf_topic>tf</tf_topic>
+                <frame_id>odom</frame_id>
+                <child_frame_id>${prefix}_base_link</child_frame_id>
             </plugin>
 
+            <!-- plugin for publishing odometry because the mecanum one cannot -->
+            <plugin name = "ignition::gazebo::systems::OdometryPublisher" filename = "ignition-gazebo-odometry-publisher-system">
+                <odom_frame>odom</odom_frame>
+                <robot_base_frame>${prefix}_base_link</robot_base_frame>
+                <odom_publish_frequency>60</odom_publish_frequency>
+                <odom_topic>odom</odom_topic>
+                <tf_topic>tf</tf_topic>
+                <publish_tf>true</publish_tf>
+                <dimensions>2</dimensions>
+            </plugin>
+
+            <!-- plugin for publishing the state of the joints -->
             <plugin name = "ignition::gazebo::systems::JointStatePublisher" filename = "ignition-gazebo-joint-state-publisher-system">
                 <topic>joint_states</topic>
                 <joint_name>${prefix}_front_left_joint</joint_name>
