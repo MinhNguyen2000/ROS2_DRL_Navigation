@@ -4,6 +4,7 @@
     <xacro:property name = "mu1" value = "0.1"/>
     <xacro:property name = "mu2" value = "0.1"/>
     <xacro:property name = "minDepth" value = "0.0001"/>
+    <xacro:property name = "piValue" value = "3.14159265359"/>
 
     <!-- LINK REFERENCES-->
     <gazebo reference = "${prefix}_front_right_wheel_link">
@@ -31,6 +32,35 @@
     </gazebo>
 
     <!-- PLUGINS -->
+    <!-- sensors plugin -->
+    <gazebo>
+        <plugin name = "ignition::gazebo::systems::Sensors" filename = "ignition-gazebo-sensors-system"/>
+    </gazebo>
+
+    <!-- lidar sensor -->
+    <gazebo reference = "${prefix}_lidar_link">
+        <sensor name = "laser" type = "gpu_lidar">
+            <pose>0 0 0.0093 0 0 0</pose>
+            <visualize>true</visualize>
+            <update_rate>10</update_rate>
+            <lidar>
+                <scan>
+                    <horizontal>
+                        <samples>1600</samples>
+                        <min_angle>${-piValue}</min_angle>
+                        <max_angle>${piValue}</max_angle>
+                    </horizontal>
+                </scan>
+                <range>
+                    <min>0.05</min>
+                    <max>12.0</max>
+                </range>
+            </lidar>
+            <topic>scan</topic>
+            <gz_frame_id>${prefix}_lidar_link</gz_frame_id>
+        </sensor>
+    </gazebo>
+
     <xacro:unless value = "$(arg use_ros_control)">
         <gazebo>
             <!-- plugin for doing the control -->
