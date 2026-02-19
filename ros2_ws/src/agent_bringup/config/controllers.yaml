@@ -1,0 +1,29 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 30
+
+    # diff controller:
+    diff_controller:
+      type: diff_drive_controller/DiffDriveController
+  
+    # joint broadcaster:
+    joint_broad:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+diff_controller:
+  ros__parameters:
+    # joint names:
+    left_wheel_names: ["agent_front_left_joint", "agent_back_left_joint"]
+    right_wheel_names: ["agent_front_right_joint", "agent_back_right_joint"]
+
+    # wheel parameters:
+    wheel_separation: 0.1695
+    wheel_radius: 0.0325
+
+    # ros parameters:
+    base_frame_id: agent_base_link
+    odom_frame_id: odom
+    enable_odom_tf: true
+    open_loop: false
+    publish_rate: 50.0
+

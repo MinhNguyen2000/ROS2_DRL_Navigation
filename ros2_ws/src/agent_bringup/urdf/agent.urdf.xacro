@@ -10,4 +10,14 @@
     <xacro:include filename = "agent_body.xacro"/>
     <xacro:include filename = "agent_peripherals.xacro"/>
     <xacro:include filename = "agent_gazebo_properties.xacro"/>
+
+    <!-- if using ros2_control -->
+    <xacro:if value = "$(arg use_ros_control)">
+        <xacro:include filename = "agent_ros_control.xacro"/>
+    </xacro:if>
+
+    <!-- if using gazebo control -->
+    <xacro:unless value = "$(arg use_ros_control)">
+        <xacro:include filename = "agent_gazebo_control.xacro"/>
+    </xacro:unless>
 </robot>
