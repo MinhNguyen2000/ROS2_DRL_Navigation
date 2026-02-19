@@ -30,8 +30,8 @@
 
     <!-- lidar to chassis joint -->
     <joint name = "${prefix}_lidar_joint" type = "fixed">
-        <origin xyz = "0.0405 5.25826986680105E-05 0.08285" rpy = "0 0 0"/>
-        <parent link = "${prefix}_chassis_link"/>
+        <origin xyz = "0.0405 5.25826986680105E-05 0.154" rpy = "0 0 0"/>         <!-- z is 0.08285 to chassis_link, 0.154 if from base_link -->
+        <parent link = "${prefix}_base_link"/>
         <child link = "${prefix}_lidar_link"/>
     </joint>
 
@@ -67,7 +67,7 @@
     <link name = "${prefix}_depth_camera_optical_link">
     </link>
 
-    <!-- optical depth camera link to actual depth camera link joint: -->
+    <!-- optical depth camera link to actual depth camera link joint -->
     <joint name = "${prefix}_camera_optical_joint" type = "fixed">
         <origin xyz = "0 0 0" rpy = "-1.570796 0 -1.570796"/>
         <parent link = "${prefix}_depth_camera_link"/>
