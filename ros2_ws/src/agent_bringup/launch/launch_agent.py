@@ -105,14 +105,6 @@ def generate_launch_description():
         arguments = ["joint_broad"], 
     )
 
-    # lidar_transform_publisher = Node(
-    #     package = "tf2_ros",
-    #     executable = "static_transform_publisher",
-    #     name = "lidar_publisher_node",
-    #     arguments = ["0.0405", "5.25826986680105E-05", "0.154", "0", "0", "0", f"{agent_name}_base_link", f"{agent_name}_lidar_link"],
-    #     condition = IfCondition(use_ros_control)
-    # )
-
     return LaunchDescription([
         use_sim_time_arg,
         use_ros_control_arg,
@@ -124,6 +116,5 @@ def generate_launch_description():
         ros_gz_bridge_gazebo_control,
         diff_drive_spawner,
         joint_broadcaster_spawner,
-        # lidar_transform_publisher
     ])
     
