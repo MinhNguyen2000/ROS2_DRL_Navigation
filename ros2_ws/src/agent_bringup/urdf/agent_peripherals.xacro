@@ -73,4 +73,21 @@
         <parent link = "${prefix}_depth_camera_link"/>
         <child link = "${prefix}_depth_camera_optical_link"/>
     </joint>
+
+    <!-- IMU -->
+    <link name = "${prefix}_imu_link">
+        <inertial>
+            <mass value = "0.01"/>
+            <origin xyz = "0 0 0" rpy = "0 0 0"/>
+            <inertia ixx = "1e-6" iyy = "1e-6" izz = "1e-6"
+                     ixy = "0"    ixz = "0"    iyz = "0"/>
+        </inertial>
+    </link>
+
+    <!-- IMU to chassis joint -->
+    <joint name = "${prefix}_imu_chassis_joint" type = "fixed">
+        <origin xyz = "0 0 0" rpy = "0 0 0"/>
+        <parent link = "${prefix}_chassis_link"/>
+        <child link = "${prefix}_imu_link"/>
+    </joint>
 </robot>

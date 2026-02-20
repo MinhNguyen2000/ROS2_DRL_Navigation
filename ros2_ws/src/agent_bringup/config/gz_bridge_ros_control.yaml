@@ -22,6 +22,12 @@
   ros_topic_name: /scan/points
   ros_type_name: sensor_msgs/msg/PointCloud2
 
+- direction: GZ_TO_ROS
+  gz_topic_name: /imu_data
+  gz_type_name: gz.msgs.IMU
+  ros_topic_name: /imu_data
+  ros_type_name: sensor_msgs/msg/Imu
+
 # - direction: ROS_TO_GZ
 #   gz_topic_name: /tf
 #   gz_type_name: gz.msgs.Pose_V
