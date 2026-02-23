@@ -15,6 +15,7 @@ from ament_index_python.packages import get_package_share_directory
 # - ros_gz_bridge
 # - diff_drive_spawner
 # - joint_broadcaster_spawner
+# - laser_scan_matcher
 
 def generate_launch_description():
     # set the required paths:
@@ -105,6 +106,23 @@ def generate_launch_description():
         arguments = ["joint_broad"], 
     )
 
+    laser_scan_matcher = Node(
+        package = "rf2o_laser_odometry",
+        executable = "rf2o_laser_odometry_node",
+        name = "rf2o_laser_odometry",
+        output = "screen",
+        parameters = [{
+            "laser_scan_topic" : "/scan",
+            "odom_topic" : "/lidar_odom",
+            "publish_tf" : False,
+            "base_frame_id" : f"{agent_name}_base_link",
+            "odom_frame_id" : "lidar_odom",
+            "init_pose_from_topic" : ""}],
+        arguments = ["--ros-args", "--log-level", "rf2o_laser_odometry:=error"],
+        condition = IfCondition(use_ros_control)
+    )
+
+
     return LaunchDescription([
         use_sim_time_arg,
         use_ros_control_arg,
@@ -116,5 +134,6 @@ def generate_launch_description():
         ros_gz_bridge_gazebo_control,
         diff_drive_spawner,
         joint_broadcaster_spawner,
+        laser_scan_matcher
     ])
     

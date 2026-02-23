@@ -22,8 +22,12 @@ diff_controller:
 
     # ros parameters:
     base_frame_id: agent_base_link
-    odom_frame_id: odom
-    enable_odom_tf: true
+    odom_frame_id: wheel_odom
+    enable_odom_tf: false
     open_loop: false
     publish_rate: 50.0
+
+joint_broad:
+  ros__parameters:
+    frame_id: agent_base_link
 

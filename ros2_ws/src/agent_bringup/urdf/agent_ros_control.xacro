@@ -50,7 +50,7 @@
             <parameters>$(find agent_bringup)/config/controllers.yaml</parameters>
             <ros>
                 <remapping>/diff_controller/cmd_vel:=/cmd_vel</remapping>
-                <remapping>/diff_controller/odom:=/odom</remapping>
+                <remapping>/diff_controller/odom:=/wheel_odom</remapping>
                 <remapping>/joint_states:=/${prefix}/joint_states</remapping>
             </ros>
         </plugin>
