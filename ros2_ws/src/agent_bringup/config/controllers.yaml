@@ -25,9 +25,13 @@ diff_controller:
     odom_frame_id: wheel_odom
     enable_odom_tf: false
     open_loop: false
-    publish_rate: 50.0
+    publish_rate: 30.0
+
+    # these are the covariances for the diff_drive controller:
+    pose_covariance_diagonal: [0.01, 0.01, 1.0, 1.0, 1.0, 0.01]
+    twist_covariance_diagonal: [0.001, 0.001, 1.0, 1.0, 1.0, 0.01]
 
 joint_broad:
   ros__parameters:
-    frame_id: agent_base_link
+    publish_rate: 30.0
 
