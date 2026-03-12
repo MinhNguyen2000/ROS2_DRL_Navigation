@@ -5,11 +5,16 @@ from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration, Command, PathJoinSubstitution
 from ament_index_python.packages import get_package_share_directory
+import os
 
 # what does this file launch?
 # - rviz
 
 def generate_launch_description():
+    # define config path:
+    pkg_path = get_package_share_directory("agent_bringup")
+    config_path = os.path.join(pkg_path, "config", "agent_rviz.rviz")
+
     # define the launch arguments:
     use_sim_time = LaunchConfiguration("use_sim_time")
     use_sim_time_arg = DeclareLaunchArgument(
@@ -28,7 +33,8 @@ def generate_launch_description():
         name = "rviz2",
         namespace = agent_name, 
         output = "screen",
-        parameters = [{"use_sim_time" : use_sim_time}]
+        parameters = [{"use_sim_time" : use_sim_time}],
+        arguments=['-d', config_path]
     )
 
     return LaunchDescription([
