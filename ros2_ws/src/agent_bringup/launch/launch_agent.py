@@ -75,8 +75,7 @@ def generate_launch_description():
         executable = "create",
         arguments = ["-topic", f"{agent_name}/robot_description",
                     "-name", agent_name,
-                    "-z", "0.0",
-                    "-Y", "-1.57079632679"],
+                    "-z", "0.0"],
         output = "screen"
     )
 
