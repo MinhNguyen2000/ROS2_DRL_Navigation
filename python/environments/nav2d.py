@@ -220,7 +220,7 @@ class Nav2D(MujocoEnv):
             (2, ): the cos(theta) and sin(theta) components of the agent's heading
             (2, ): the cos() and sin() componets of the relative bearing
             (2, ): local velocities of the agent (along local x and about local z)
-            (n_ray_grous, ): minpooled groups of LiDAR scans
+            (n_ray_groups, ): minpooled groups of LiDAR scans
 
         '''
         # list of observation states
@@ -426,8 +426,9 @@ class Nav2D(MujocoEnv):
 
             # set the new position of these obstacles:
             for i in range(self.n_obstacles):
-                qpos_array[5+2*i:7+2*i] = obstacle_locs[i] - self._obstacle_loc[i]
-
+                qpos_array[5+3*i:7+3*i] = obstacle_locs[i] - self._obstacle_loc[i]
+                qpos_array[7+3*i] = self.np_random.uniform(size = 1, low = -2 * np.pi, high = 2 * np.pi)
+            
             qvel_array[0:2] = self.np_random.uniform(size = 2, low = noise_low, high = noise_high)
 
             self.init_qpos = qpos_array
@@ -597,8 +598,6 @@ class Nav2D(MujocoEnv):
                 # zero the obstacle terms:
                 rew_obs_dist = 0
                 rew_obs_align = 0
-            
-            # when near an obstacle, focus on moving away
             else:
                 #--- OBSTACLE APPROACH PENALTY:
                 rew_obs_dist = min((min_dist / (self.min_dist_last + 1e-6) - 1), 0)
@@ -612,10 +611,13 @@ class Nav2D(MujocoEnv):
                     else:
                         rew_obs_align = 0
 
-
-            #--- PENALIZE ABRUPT CHANGES IN VELOCITY
+                # zero approach terms:
+                rew_dist_approach = 0
+                rew_head_approach = 0
+            
+            #--- PENALIZE ABRUPT CHANGES IN VELOCITY:
             act_diff = np.abs(action - self.action_last)          # penalize both abrupt changes in linear and angular velocities
-            rew_act_diff = -0.5 * np.sum(act_diff ** 2)
+            rew_act_diff = -0.25 * np.sum(act_diff ** 2)
 
             #--- PENALIZE STALLING:
             if abs(action[0]) <= 0.05:
@@ -623,32 +625,30 @@ class Nav2D(MujocoEnv):
             else:
                 rew_time = self.rew_time
 
-            # Scaling 
-            # self.rew_dist_scaled            = self.rew_dist_scale           * rew_dist        
-            self.rew_dist_approach_scaled   = self.rew_dist_approach_scale  * rew_dist_approach
-            # self.rew_head_scaled            = self.rew_head_scale           * rew_head
-            self.rew_head_approach_scaled   = self.rew_head_approach_scale  * rew_head_approach
-            self.rew_obs_dist_scaled        = self.rew_obs_dist_scale       * rew_obs_dist
-            self.rew_obs_align_scaled       = self.rew_obs_align_scale      * rew_obs_align
+            #--- SCALE TERMS:
+            self.rew_dist_approach_scaled = rew_dist_approach * self.rew_dist_approach_scale
+            self.rew_head_approach_scaled = rew_head_approach * self.rew_head_approach_scale
+            self.rew_obs_dist_scaled      = rew_obs_dist      * self.rew_obs_dist_scale
+            self.rew_obs_align_scaled     = rew_obs_align     * self.rew_obs_align_scale
 
             #--- TOTAL REWARD:
             rew = 0
-            rew += self.rew_dist_scaled + self.rew_head_scaled
-            rew += self.rew_dist_approach_scaled + self.rew_head_approach_scaled
+            rew += self.rew_dist_approach_scaled
+            rew += self.rew_head_approach_scaled
             rew += self.rew_obs_dist_scaled + self.rew_obs_align_scaled
-            rew += rew_act_diff
             rew += rew_time
+            rew += rew_act_diff
 
             # print to user:
             if self.render_mode == "human":
-                # # observation debug
+                # observation debug
                 # print(f" @ episode {self.episode_counter} | "
                 #       f"(dx,dy)=({dx: 4.2f},{dy: 4.2f}) | d_goal={d_goal:5.3f}  | "
                 #       fr"θ={heading/np.pi*180: 6.2f} | Ψ={bearing/np.pi*180: 6.2f} | "
                 #       f"(vx, vz)_(t-1)=({v_lin: 5.3f},{v_ang: 5.3f}) | "
-                #       f"(vx, vz)_t={action[0]: 5.3f},{action[1]: 5.3f}       ", end="\r")
+                #       f"(vx, vz)_t={action[0]: 5.3f},{action[1]: 5.3f}          ", end="\r")
 
-                # # lidar debug
+                # lidar debug
                 # print(lidar_obs)
 
                 # reward debug
@@ -661,7 +661,7 @@ class Nav2D(MujocoEnv):
                       f"r_head_app: {self.rew_head_approach_scaled: 5.3f} | "
                       f"r_obs_dist: {self.rew_obs_dist_scaled: 5.3f} | "
                       f"r_obs_align: {self.rew_obs_align_scaled: 5.3f} | "
-                      f"rew_act_diff: {rew_act_diff: 5.3f} | "
+                      f"r_act_diff: {rew_act_diff: 5.3f} | "
                       f"r_time: {self.rew_time: 4.2f} | "
                       f"r_total: {rew: 5.3f}  ",
                       end="\r")

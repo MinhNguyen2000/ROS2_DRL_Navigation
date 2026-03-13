@@ -335,6 +335,7 @@ class MakeEnv:
         # add joints to the obstacle:
         self.obstacle.add_joint(name = f"obstacle_{self.obstacle_counter}_x_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [1, 0, 0])
         self.obstacle.add_joint(name = f"obstacle_{self.obstacle_counter}_y_slide", type = mj.mjtJoint.mjJNT_SLIDE, axis = [0, 1, 0])
+        self.obstacle.add_joint(name = f"obstacle_{self.obstacle_counter}_z_hinge", type = mj.mjtJoint.mjJNT_HINGE, axis = [0, 0, 1])
 
         # add that shape to the environment:
         self.obstacle.add_geom(name = f"obstacle_{self.obstacle_counter}_geom",
