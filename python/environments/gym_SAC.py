@@ -401,6 +401,7 @@ def main(do_studies : bool = False,
         obstacle_options = {"n_obstacles" : 10}
 
         n_ray_groups = 18
+        batch_size = 512
         
         # model hyperparameters:
         pi_arch = [512, 256]
@@ -412,8 +413,8 @@ def main(do_studies : bool = False,
                         "actor_lr" : 3e-4,
                         "critic_lr" : 3e-4,
                         "buffer_size" : int(2e6),
-                        "learning_starts" : int(512),
-                        "batch_size" : 512,
+                        "learning_starts" : int(1 * batch_size),
+                        "batch_size" : batch_size,
                         "tau" : 1e-3,
                         "gamma" : 0.99,
                         "train_freq" : 2,
@@ -421,7 +422,7 @@ def main(do_studies : bool = False,
                         "gradient_steps" : 4,
                         "ent_coef" : "auto",
                         "target_entropy" : "auto",
-                        "action_noise_std" : 0.05,
+                        "action_noise_std" : 0.1,
                         "verbose" : 0, 
                         "gpu" : True,
                         "policy_kwargs": policy_kwargs,
