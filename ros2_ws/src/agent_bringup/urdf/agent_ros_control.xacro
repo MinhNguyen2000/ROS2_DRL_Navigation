@@ -46,12 +46,13 @@
     <gazebo>
         <plugin name = "gz_ros2_control::GazeboSimROS2ControlPlugin" filename = "gz_ros2_control-system">
             <robot_param>robot_description</robot_param>
-            <robot_param_node>/${prefix}/robot_state_publisher</robot_param_node>
+            <robot_param_node>robot_state_publisher</robot_param_node>
             <parameters>$(find agent_bringup)/config/controllers.yaml</parameters>
             <ros>
-                <remapping>/diff_controller/cmd_vel:=/cmd_vel</remapping>
-                <remapping>/diff_controller/odom:=/wheel_odom</remapping>
-                <remapping>/joint_states:=/${prefix}/joint_states</remapping>
+                <namespace>${prefix}</namespace>
+                <remapping>diff_controller/cmd_vel:=cmd_vel</remapping>
+                <remapping>diff_controller/odom:=wheel_odom</remapping>
+                <remapping>joint_states:=joint_states</remapping>
             </ros>
         </plugin>
     </gazebo>

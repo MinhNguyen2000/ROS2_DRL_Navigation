@@ -14,14 +14,14 @@ class CovFilter(Node):
         # topics that the node is subscribing to:
         self.imu_sub = self.create_subscription(
             Imu,
-            "/imu_data", 
+            "imu_data", 
             self.imu_callback,
             10
         )
 
         self.lidar_sub = self.create_subscription(
             Odometry, 
-            "/lidar_odom",
+            "lidar_odom",
             self.lidar_callback,
             10
         )
@@ -29,13 +29,13 @@ class CovFilter(Node):
         # topics that the node is publishing to:
         self.imu_pub = self.create_publisher(
             Imu,
-            "/imu_data_filtered",
+            "imu_data_filtered",
             10
         )
 
         self.lidar_pub = self.create_publisher(
             Odometry, 
-            "/lidar_odom_filtered",
+            "lidar_odom_filtered",
             10
         )
 

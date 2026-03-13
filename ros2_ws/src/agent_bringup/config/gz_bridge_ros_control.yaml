@@ -5,40 +5,28 @@
   ros_type_name: rosgraph_msgs/msg/Clock
 
 - direction: ROS_TO_GZ
-  gz_topic_name: /cmd_vel
+  gz_topic_name: cmd_vel
   gz_type_name: gz.msgs.Twist
-  ros_topic_name: /cmd_vel
+  ros_topic_name: agent/cmd_vel
   ros_type_name: geometry_msgs/msg/TwistStamped
 
 - direction: GZ_TO_ROS
-  gz_topic_name: /scan
+  gz_topic_name: scan
   gz_type_name: gz.msgs.LaserScan
-  ros_topic_name: /scan
+  ros_topic_name: agent/scan
   ros_type_name: sensor_msgs/msg/LaserScan
   
 - direction: GZ_TO_ROS
-  gz_topic_name: /scan/points
+  gz_topic_name: scan/points
   gz_type_name: gz.msgs.PointCloudPacked
-  ros_topic_name: /scan/points
+  ros_topic_name: agent/scan/points
   ros_type_name: sensor_msgs/msg/PointCloud2
 
 - direction: GZ_TO_ROS
-  gz_topic_name: /imu_data
+  gz_topic_name: imu_data
   gz_type_name: gz.msgs.IMU
-  ros_topic_name: /imu_data
+  ros_topic_name: agent/imu_data
   ros_type_name: sensor_msgs/msg/Imu
-
-# - direction: ROS_TO_GZ
-#   gz_topic_name: /tf
-#   gz_type_name: gz.msgs.Pose_V
-#   ros_topic_name: /tf
-#   ros_type_name: tf2_msgs/msg/TFMessage
-
-# - direction: ROS_TO_GZ
-#   gz_topic_name: /odom
-#   gz_type_name: gz.msgs.Odometry
-#   ros_topic_name: /odom
-#   ros_type_name: nav_msgs/msg/Odometry
 
 
 

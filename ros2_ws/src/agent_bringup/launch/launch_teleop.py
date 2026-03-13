@@ -27,11 +27,15 @@ def generate_launch_description():
         description = "Whether or not to stamp the cmd_vel topic"
     )
 
+    # set the required parameters:
+    agent_name = "agent"
+
     # define the nodes to be launched:
     teleop = Node(
         package = "teleop_twist_keyboard",
         executable = "teleop_twist_keyboard",
         name = "teleop_twist_keyboard",
+        namespace = agent_name,
         output = "screen",
         prefix = "xterm -e",
         parameters = [{"use_sim_time" : use_sim_time, "stamped" : stamped}]

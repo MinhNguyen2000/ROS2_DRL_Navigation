@@ -1,16 +1,16 @@
-controller_manager:
+agent/controller_manager:
   ros__parameters:
     update_rate: 30
 
     # diff controller:
     diff_controller:
       type: diff_drive_controller/DiffDriveController
-  
+
     # joint broadcaster:
     joint_broad:
       type: joint_state_broadcaster/JointStateBroadcaster
 
-diff_controller:
+agent/diff_controller:
   ros__parameters:
     # joint names:
     left_wheel_names: ["agent_front_left_joint", "agent_back_left_joint"]
@@ -30,8 +30,4 @@ diff_controller:
     # these are the covariances for the diff_drive controller:
     pose_covariance_diagonal: [0.01, 0.01, 1.0, 1.0, 1.0, 0.01]
     twist_covariance_diagonal: [0.01, 0.01, 1.0, 1.0, 1.0, 0.01]
-
-joint_broad:
-  ros__parameters:
-    publish_rate: 30.0
 

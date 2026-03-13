@@ -1,10 +1,10 @@
 import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.parameter_descriptions import ParameterValue
-from launch_ros.actions import Node
+from launch_ros.actions import Node, PushRosNamespace
 from launch.substitutions import LaunchConfiguration, Command, PathJoinSubstitution
 from ament_index_python.packages import get_package_share_directory
 
@@ -52,7 +52,6 @@ def generate_launch_description():
 
     # set the required parameters:
     agent_name = "agent"
-    
     robot_description = Command(["xacro ", xacro_path, " agent_name:=", agent_name, " use_ros_control:=", use_ros_control])
     rsp_parameters = {"robot_description": ParameterValue(robot_description, value_type = str), "use_sim_time" : use_sim_time}
 
@@ -61,7 +60,7 @@ def generate_launch_description():
         package = "robot_state_publisher",
         executable = "robot_state_publisher",
         name = "robot_state_publisher",
-        namespace = agent_name,
+        namespace = agent_name, 
         parameters = [rsp_parameters]
     )
 
@@ -70,11 +69,15 @@ def generate_launch_description():
         launch_arguments = {"world" : world}.items()
     )
 
-    spawner = Node(
+    agent_spawner = Node(
         package = "ros_gz_sim",
         executable = "create",
-        arguments = ["-topic", f"{agent_name}/robot_description",
+        namespace = agent_name, 
+        arguments = [
+                    "-topic", f"robot_description",
                     "-name", agent_name,
+                    "-x", "-3.0",
+                    "-y", "-3.0",
                     "-z", "0.0"],
         output = "screen"
     )
@@ -98,6 +101,7 @@ def generate_launch_description():
     diff_drive_spawner = Node(
         package = "controller_manager",
         executable = "spawner",
+        namespace = agent_name,
         arguments = ["diff_controller"],
         condition = IfCondition(use_ros_control)
     )
@@ -105,6 +109,7 @@ def generate_launch_description():
     joint_broadcaster_spawner = Node(
         package = "controller_manager",
         executable = "spawner",
+        namespace = agent_name,
         arguments = ["joint_broad"],
         condition = IfCondition(use_ros_control)
     )
@@ -113,16 +118,16 @@ def generate_launch_description():
         package = "rf2o_laser_odometry",
         executable = "rf2o_laser_odometry_node",
         name = "rf2o_laser_odometry",
+        namespace = agent_name,
         output = "screen",
         parameters = [{
-            "laser_scan_topic" : "/scan",
-            "odom_topic" : "/lidar_odom",
+            "laser_scan_topic" : "scan",
+            "odom_topic" : "lidar_odom",
             "publish_tf" : False,
             "base_frame_id" : f"{agent_name}_base_link",
             "odom_frame_id" : "odom",
             "init_pose_from_topic" : "",
             "freq" : 30.0}],
-        arguments = ["--ros-args", "--log-level", "rf2o_laser_odometry:=error"],
         condition = IfCondition(use_ros_control)
     )
 
@@ -134,13 +139,25 @@ def generate_launch_description():
         condition = IfCondition(use_ros_control)
     )
 
+    covariance_filter_node = GroupAction(
+        actions = [
+            PushRosNamespace(agent_name),
+            covariance_filter_node
+        ]
+    )
+
     ekf_node = Node(
         package = "robot_localization",
         executable = "ekf_node",
         name = "ekf_filter_node",
+        namespace = agent_name, 
         output = "screen",
         parameters = [ekf_params_path, {"use_sim_time" : use_sim_time}],
-        remappings = [("/odometry/filtered", "/odom")],
+        remappings = [
+                    #   ("wheel_odom", f"{agent_name}/wheel_odom"),
+                    #   ("lidar_odom_filtered", f"{agent_name}/lidar_odom_filtered"),
+                    #   ("imu_data_filtered", f"{agent_name}/imu_data_filtered"),
+                      ("odometry/filtered", "odom")],
         condition = IfCondition(use_ros_control)
     )
 
@@ -148,13 +165,13 @@ def generate_launch_description():
         use_sim_time_arg,
         use_ros_control_arg,
         world_arg,
-        rsp, 
+        rsp,
         gazebo,
-        spawner, 
-        ros_gz_bridge_ros_control,
+        agent_spawner,
         ros_gz_bridge_gazebo_control,
+        ros_gz_bridge_ros_control,
         diff_drive_spawner,
-        joint_broadcaster_spawner,
+        joint_broadcaster_spawner, 
         laser_scan_matcher,
         covariance_filter_node,
         ekf_node
