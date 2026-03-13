@@ -81,10 +81,10 @@ ekf_filter_node:
 
     ############## this is the wheel_odom ##############
     odom0: /wheel_odom
-    odom0_config: [false, false, false,
+    odom0_config: [true, true, false,
                   false, false, true,
-                  true, true, false, # vx only, vy=0 constraint on non-holonomic vehicles
-                  false, false, true, # vyaw
+                  true, true, false,
+                  false, false, false,
                   false, false, false]
 
     odom0_queue_size: 5
@@ -95,8 +95,8 @@ ekf_filter_node:
 
     ############## this is the LiDAR odom ##############
     odom1: /lidar_odom_filtered
-    odom1_config: [true, true, false, # x and y
-                  false, false, false, # yaw
+    odom1_config: [true, true, false,
+                  false, false, false,
                   false, false, false,
                   false, false, false,
                   false, false, false]
@@ -110,10 +110,10 @@ ekf_filter_node:
     ############# this is the IMU data ##############
     imu0: /imu_data_filtered
     imu0_config: [false, false, false,
-                  false, false, false,  # set the yaw to true if magnetometer present
-                  false, false, false,
-                  false, false, true,   # vyaw only, ignore vroll/vpitch in 2D
-                  true,  false, false]    # ax, ignore ay due to non-holonomic ignore az in 2D
+                false, false, false,
+                false, false, false,
+                false, false, true,
+                false, false, false]
 
     imu0_queue_size: 5
     imu0_nodelay: false
@@ -149,12 +149,12 @@ ekf_filter_node:
                               0.0,   0.0,   0.0,    0.03,   0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
                               0.0,   0.0,   0.0,    0.0,    0.03,   0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
                               0.0,   0.0,   0.0,    0.0,    0.0,    0.06,   0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
-                              0.0,   0.0,   0.0,    0.0,    0.0,    0.0,    0.05,    0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
-                              0.0,   0.0,   0.0,    0.0,    0.0,    0.0,    0.0,     0.05,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+                              0.0,   0.0,   0.0,    0.0,    0.0,    0.0,    0.025,   0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+                              0.0,   0.0,   0.0,    0.0,    0.0,    0.0,    0.0,     0.025,   0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
                               0.0,   0.0,   0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.04,   0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
                               0.0,   0.0,   0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.01,   0.0,    0.0,    0.0,    0.0,    0.0,
                               0.0,   0.0,   0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.01,   0.0,    0.0,    0.0,    0.0,
-                              0.0,   0.0,   0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.1,    0.0,    0.0,    0.0,
+                              0.0,   0.0,   0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.02,   0.0,    0.0,    0.0,
                               0.0,   0.0,   0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.01,   0.0,    0.0,
                               0.0,   0.0,   0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.01,   0.0,
                               0.0,   0.0,   0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.015]

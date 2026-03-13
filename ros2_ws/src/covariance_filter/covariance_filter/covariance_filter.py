@@ -39,46 +39,29 @@ class CovFilter(Node):
             10
         )
 
-        # IMU covariances:
-        # r, p, y row major
-        self.imu_orientation_covariance = [1.0,
-                                       0.0,
-                                       0.0,
-                                       0.0,
-                                       1.0,
-                                       0.0,
-                                       0.0,
-                                       0.0,
-                                       0.05]
+        # IMU covariances - as per https://docs.ros2.org/foxy/api/sensor_msgs/msg/Imu.html
+        # orientation covariance row majors, in the order of (roll, pitch, yaw)
+        self.imu_orientation_covariance = [1.0, 0.0, 0.0,
+                                           0.0, 1.0, 0.0,
+                                           0.0, 0.0, 0.05]
+        # angular velocity covariance row majors, in the order of (vroll, vpitch, vyaw)
+        self.imu_angular_velocity_covariance = [1.0, 0.0, 0.0,
+                                                0.0, 1.0, 0.0,
+                                                0.0, 0.0, 0.01]
+        # linear acceleratioin covariance row majors, in the order of (ax, ay, az)
+        self.imu_linear_acceleration_covariance = [0.1, 0.0, 0.0,
+                                                   0.0, 0.1, 0.0,
+                                                   0.0, 0.0, 0.5]
         
-        self.imu_angular_velocity_covariance = [1.0,
-                                            0.0,
-                                            0.0,
-                                            0.0,
-                                            1.0,
-                                            0.0,
-                                            0.0,
-                                            0.0,
-                                            0.05]
-        
-        self.imu_linear_acceleration_covariance = [1.0,
-                                               0.0,
-                                               0.0,
-                                               0.0,
-                                               1.0,
-                                               0.0,
-                                               0.0,
-                                               0.0,
-                                               1.0]
-        
-        # LiDAR covariances:
+        # LiDAR covariances - as per https://docs.ros2.org/foxy/api/nav_msgs/msg/Odometry.html
+        # pose covariance, in the order of (x, y, z, r, p, y)
         self.lidar_pose_covariance = [0.001,  0.0,   0.0, 0.0, 0.0, 0.0,
                                       0.0,    0.001, 0.0, 0.0, 0.0, 0.0,
                                       0.0,    0.0,   1.0, 0.0, 0.0, 0.0,
                                       0.0,    0.0,   0.0, 1.0, 0.0, 0.0,
                                       0.0,    0.0,   0.0, 0.0, 1.0, 0.0,
                                       0.0,    0.0,   0.0, 0.0, 0.0, 0.05]
-          
+        # twist covariance, in the order of (vx, vy, vz, vr, vp, vy)
         self.lidar_twist_covariance = [0.1, 0.0,  0.0,  0.0,  0.0,  0.0,
                                       0.0,  0.1,  0.0,  0.0,  0.0,  0.0,
                                       0.0,  0.0,  1.0,  0.0,  0.0,  0.0,
