@@ -22,7 +22,7 @@ class DRLPolicyNode(Node):
         super().__init__('drl_policy_node')
 
         # TODO - declare and store parameters/runtime arguments (obs_dim, act_dim, min/max vel, control/inference rate)
-        self.declare_parameter('inference_rate', 10.0)      # Hz
+        self.declare_parameter('inference_rate', 10.0)      # Hz, TODO - change this depending on the desired control rate/how fast the actuators can react
 
         # TODO - load the model
 
