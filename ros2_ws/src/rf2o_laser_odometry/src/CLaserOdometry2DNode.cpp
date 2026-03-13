@@ -33,7 +33,7 @@ bool CLaserOdometry2DNode::setLaserPoseFromTf()
   }
   catch (tf2::TransformException &ex)
   {
-    RCLCPP_ERROR(get_logger(), "%s",ex.what());
+    // RCLCPP_ERROR(get_logger(), "%s",ex.what());
     retrieved = false;
   }
 
@@ -76,7 +76,7 @@ void CLaserOdometry2DNode::process()
   }
   else
   {
-    RCLCPP_WARN(get_logger(), "Waiting for laser_scans....") ;
+    // RCLCPP_WARN(get_logger(), "Waiting for laser_scans....") ;
   }
 }
 
