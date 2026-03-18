@@ -7,7 +7,7 @@
     <xacro:property name = "c_mass" value = "2.415"/>   <!-- chassis mass in kg -->
     <xacro:property name = "w_mass" value = "0.058"/>   <!-- wheel mass in kg -->
     <xacro:property name = "wheel_effort" value = "0.5"/>
-    <xacro:property name = "wheel_max_vel" value = "10.0"/>
+    <xacro:property name = "wheel_max_vel" value = "30.0"/>
 
     <!-- MATERIALS -->
     <material name = "black">

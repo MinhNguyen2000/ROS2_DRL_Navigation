@@ -1,8 +1,8 @@
 <?xml version = "1.0"?>
 <robot xmlns:xacro = "http://www.ros.org/wiki/xacro">
     <!-- PROPERTIES -->
-    <xacro:property name = "mu1" value = "1.00"/>
-    <xacro:property name = "mu2" value = "0.03"/>
+    <xacro:property name = "mu1" value = "1.0"/>
+    <xacro:property name = "mu2" value = "0.1"/>
     <xacro:property name = "minDepth" value = "0.0001"/>
     <xacro:property name = "piValue" value = "3.14159265359"/>
 
@@ -38,8 +38,8 @@
                 <scan>
                     <horizontal>
                         <samples>1600</samples>
-                        <min_angle>0.0</min_angle>
-                        <max_angle>${2 * piValue}</max_angle>
+                        <min_angle>${-piValue}</min_angle>
+                        <max_angle>${piValue}</max_angle>
                     </horizontal>
                 </scan>
                 <range>
