@@ -16,6 +16,7 @@ from ament_index_python.packages import get_package_share_directory
 import os
 import pickle
 import time
+import copy
 
 class DRLPolicyNode(Node):
     def __init__(self):
@@ -24,9 +25,9 @@ class DRLPolicyNode(Node):
         # TODO - declare and store ROS2 parameters/runtime arguments 
         self.declare_parameter('goal_tolerance', 0.5)
         self.declare_parameter('obstacle_tolerance', 0.20)
-        self.declare_parameter('model_name', 'TD3_001')
-        self.declare_parameter('max_lin_vel', 0.1)
-        self.declare_parameter('max_angular_vel', 0.08)
+        self.declare_parameter('model_name', 'SAC_001')
+        self.declare_parameter('max_lin_vel', 0.02)
+        self.declare_parameter('max_angular_vel', 0.03)
 
         self.default_goal_tolerance = self.get_parameter('goal_tolerance').value
         self.default_obstacle_tolerance = self.get_parameter('obstacle_tolerance').value
@@ -34,28 +35,6 @@ class DRLPolicyNode(Node):
         self.max_lin_vel = self.get_parameter('max_lin_vel').value
         self.max_angular_vel = self.get_parameter('max_angular_vel').value
 
-
-class DRLPolicyNode(Node):
-    def __init__(self):
-        super().__init__('drl_policy_node')
-
-        # TODO - declare and store ROS2 parameters/runtime arguments 
-        self.declare_parameter('goal_tolerance', 0.5)
-        self.declare_parameter('obstacle_tolerance', 0.20)
-        self.declare_parameter('model_name', 'TD3_001')
-        self.declare_parameter('max_lin_vel', 0.1)
-        self.declare_parameter('max_angular_vel', 0.08)
-
-        self.default_goal_tolerance = self.get_parameter('goal_tolerance').value
-        self.default_obstacle_tolerance = self.get_parameter('obstacle_tolerance').value
-        self.model_name = self.get_parameter('model_name').value
-        self.max_lin_vel = self.get_parameter('max_lin_vel').value
-        self.max_angular_vel = self.get_parameter('max_angular_vel').value
-
-        # TODO - load the model and extract the number of n_ray_groups for LiDAR group
-        # Assume that the models and norm stats are stored under drl_policy/policy/TD3_xxx/model.zip and norm_stats.pkl
-        pkg_dir = get_package_share_directory('drl_policy')
-        model_dir = os.path.jo
         # TODO - load the model and extract the number of n_ray_groups for LiDAR group
         # Assume that the models and norm stats are stored under drl_policy/policy/TD3_xxx/model.zip and norm_stats.pkl
         pkg_dir = get_package_share_directory('drl_policy')
@@ -63,7 +42,8 @@ class DRLPolicyNode(Node):
         model_path = os.path.join(model_dir, "model")
         norm_stat_path = os.path.join(model_dir, "norm_stats.pkl")
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = TD3.load(model_path, device=self.device)
+        # model = TD3.load(model_path, device=self.device)
+        model = SAC.load(model_path, device=self.device)
         self.policy = model.policy.actor
         self.policy.eval()
 
@@ -76,6 +56,22 @@ class DRLPolicyNode(Node):
         self.n_ray_groups = 18
         self._obs_space_size = 27
         self._obs_buffer = np.zeros(self._obs_space_size, dtype=np.float32)
+
+        # TODO - initialize DRL stuff
+        self.action_last = np.zeros(2)
+        self.action = np.zeros(2)
+        self.d_goal_last = 0.0
+        self.prev_abs_diff = 0.0
+        self.min_dist_last = 0.0
+        self.d_safe = 0.5
+        self.lidar_idx_threshold = 4
+
+        # intialize the scaled reward components
+        self.rew_head_approach_scaled = 0   ; self.rew_head_approach_scale = 200.0
+        self.rew_dist_approach_scaled = 0   ; self.rew_dist_approach_scale = 200.0
+        self.rew_obs_dist_scaled = 0        ; self.rew_obs_dist_scale = 0.5
+        self.rew_obs_align_scaled = 0       ; self.rew_obs_align_scale = 0.5
+        self.rew_time = -0.5
 
         # --- State storage ---
         self.latest_odom: Odometry | None = None
@@ -104,7 +100,16 @@ class DRLPolicyNode(Node):
         self.latest_odom = msg
 
     def lidar_callback(self, msg: LaserScan):
-        self.latest_scan = msg
+        ranges = np.array(msg.ranges)
+
+        # index of the zero angle in the (-π, π) scan
+        zero_idx = round(-msg.angle_min / msg.angle_increment)
+
+        # rotate the ranges from (-π, π) to (0, 2π)
+        ranges_drl = np.roll(ranges, -zero_idx)
+
+        self.latest_scan = copy.deepcopy(msg)
+        self.latest_scan.ranges = ranges_drl.tolist()
 
     def goal_callback(self, goal_request: NavigateToGoal):
         '''
@@ -154,7 +159,7 @@ class DRLPolicyNode(Node):
         feedback_msg = NavigateToGoal.Feedback()
         result_msg = NavigateToGoal.Result()
 
-        ctrl_freq = 10
+        ctrl_freq = 100
         ctrl_period = 1.0 / ctrl_freq
 
         while rclpy.ok():
@@ -187,7 +192,7 @@ class DRLPolicyNode(Node):
 
             # --- 2. Check termination conditions ---
             d_goal = obs[2]
-            min_lidar = np.min(obs[9:])        # TODO - bootstrap idea to ignore the LiDAR rays hitting the antennae
+            min_lidar = np.min(obs[9:])
             # self.get_logger().info(f'Minimum LiDAR reading: {min_lidar}')
             if d_goal <= self.goal_tolerance:
                 self.cmd_pub.publish(TwistStamped())
@@ -207,16 +212,19 @@ class DRLPolicyNode(Node):
             
 
             # --- 3. DRL policy inference => action ---
-            action = self._run_policy(obs_normed)
+            self.action = self._run_policy(obs_normed)          # vx, vyaw in moving agent frame
+
+            self.action[0] = np.clip(self.action[0], 0.0, 1.0)
+            self.action[1] = np.clip(self.action[1], -1.0, 1.0)
+
+            self._get_rewards(obs)
 
             cmd = TwistStamped()
             cmd.header.stamp = self.get_clock().now().to_msg()
             cmd.header.frame_id = 'agent_base_link'
-            cmd.twist.linear.x = float(np.clip(action[0], 0.0, 1.0)) * self.max_lin_vel
-            cmd.twist.angular.z = float(np.clip(action[1], -1.0, 1.0)) * self.max_angular_vel
-            self.get_logger().debug(
-                f"Linear vel: {cmd.twist.linear.x: 5.3f} | Angular vel: {cmd.twist.angular.z: 5.3f}"
-            )
+            cmd.twist.linear.x = float(self.action[0]) * self.max_lin_vel
+            cmd.twist.angular.z = float(self.action[1]) * self.max_angular_vel
+            # self.get_logger().info(f"Linear vel: {cmd.twist.linear.x: 5.3f} | Angular vel: {cmd.twist.angular.z: 5.3f}")
             self.cmd_pub.publish(cmd)
 
             # --- Extra: Publish Feedback
@@ -253,8 +261,10 @@ class DRLPolicyNode(Node):
         agent_pos = odom.pose.pose.position                 # agent (x,y,z) in initial odom frame
         ori_quat = odom.pose.pose.orientation
         agent_yaw = self._yaw_from_quaternion(ori_quat)     # agent yaw in initial odom frame
-        agent_vx = odom.twist.twist.linear.x                # agent's velocity in the moving frame TODO - verify whether this is in the agent frame or world frame
-        agent_vyaw = odom.twist.twist.angular.z             # agent's yaw velocity along z in the moving frame
+        # agent_vx = odom.twist.twist.linear.x                # agent's velocity in the moving frame TODO - verify whether this is in the agent frame or world frame
+        # agent_vyaw = odom.twist.twist.angular.z             # agent's yaw velocity along z in the moving frame
+        agent_vx = self.action[0]
+        agent_vyaw = self.action[1]
 
         goal_pos = target.pose.position
 
@@ -294,10 +304,87 @@ class DRLPolicyNode(Node):
         obs_normalized = self.vec_norm.normalize_obs(obs_batch)
         return obs_normalized.reshape(-1).astype(np.float32)
 
-    def _run_policy(self, obs: np.ndarray):
+    def _get_rewards(self, obs):
+        d_goal = obs[2]
+        abs_diff = np.arctan2(obs[6], obs[5], dtype=np.float32)
+        lidar_obs = obs[9:]
+        min_dist = np.min(lidar_obs)
+        min_dist_idx = np.argmin(lidar_obs)
+        v_lin, v_ang = obs[7:9]
+
+        if min_dist >= self.d_safe:
+            #--- DISTANCE APPROACH REWARD:
+            # this reward term incentivizes approaching the goal, and rewards 0 otherwise:
+            rew_dist_approach = max((self.d_goal_last - d_goal), 0)
+
+            #--- HEADING APPROACH REWARD:
+            # this reward term incentivizes approaching the required heading, and rewards 0 otherwise
+            rew_head_approach = max((self.prev_abs_diff - abs_diff), 0) if self.action[0] >= 0.05 else 0
+
+            # zero the obstacle terms:
+            rew_obs_dist = 0
+            rew_obs_align = 0
+        
+        # when near an obstacle, focus on moving away
+        else:
+            rew_dist_approach = 0
+            rew_head_approach = 0
+            #--- OBSTACLE APPROACH PENALTY:
+            rew_obs_dist = min((min_dist / (self.min_dist_last + 1e-6) - 1), 0)
+
+            # REWARD FOR NOT BEING ALIGNED WITH OBSTACLES:
+            if min_dist_idx >= self.lidar_idx_threshold and min_dist_idx < self.n_ray_groups - self.lidar_idx_threshold and v_lin >= 0.05:
+                rew_obs_align = 1
+            else:
+                if (min_dist_idx < self.lidar_idx_threshold and v_ang > 0) or (min_dist_idx >= self.n_ray_groups - self.lidar_idx_threshold and v_ang < 0):
+                    rew_obs_align = min(1, np.abs(v_ang))
+                else:
+                    rew_obs_align = 0
+
+        #--- PENALIZE ABRUPT CHANGES IN VELOCITY
+        act_diff = np.abs(self.action - self.action_last)          # penalize both abrupt changes in linear and angular velocities
+        rew_act_diff = -0.5 * np.sum(act_diff ** 2)
+
+        #--- PENALIZE STALLING:
+        if abs(self.action[0]) <= 0.05:
+            rew_time = 2 * self.rew_time
+        else:
+            rew_time = self.rew_time
+
+        # Scaling 
+        self.rew_dist_approach_scaled   = self.rew_dist_approach_scale  * rew_dist_approach
+        self.rew_head_approach_scaled   = self.rew_head_approach_scale  * rew_head_approach
+        self.rew_obs_dist_scaled        = self.rew_obs_dist_scale       * rew_obs_dist
+        self.rew_obs_align_scaled       = self.rew_obs_align_scale      * rew_obs_align
+
+        #--- TOTAL REWARD:
+        rew = 0
+        rew += self.rew_dist_approach_scaled + self.rew_head_approach_scaled
+        rew += self.rew_obs_dist_scaled + self.rew_obs_align_scaled
+        rew += rew_act_diff
+        rew += rew_time
+
+        self.d_goal_last = d_goal
+        self.prev_abs_diff = abs_diff
+        self.min_dist_last = min_dist
+        self.action_last = self.action
+
+        self.get_logger().info(f"r_dist_app: {self.rew_dist_approach_scaled: 5.3f} | "
+                               f"r_head_app: {self.rew_head_approach_scaled: 5.3f} | "
+                               f"r_obs_dist: {self.rew_obs_dist_scaled: 5.3f} | "
+                               f"r_obs_align: {self.rew_obs_align_scaled: 5.3f} | "
+                               f"rew_act_diff: {rew_act_diff: 5.3f} | "
+                               f"r_time: {self.rew_time: 4.2f} | "
+                               f"r_total: {rew: 5.3f}  ")
+
+
+
+    def _run_policy(self, obs: np.ndarray) -> np.ndarray:
         with torch.no_grad():
             obs_tensor = torch.from_numpy(obs).unsqueeze(0).to(self.device)
-            action = self.policy.mu(obs_tensor).squeeze(0).cpu().numpy()
+            # action = self.policy.mu(obs_tensor).squeeze(0).cpu().numpy()
+            action = self.policy.latent_pi(obs_tensor)
+            action = self.policy.mu(action).squeeze(0).cpu().numpy()
         return action
 
 def main():
