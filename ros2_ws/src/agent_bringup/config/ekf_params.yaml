@@ -80,42 +80,51 @@ agent/ekf_filter_node:
     # The order of the values is (x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az)
 
     ############## this is the wheel_odom ##############
+    # - IMU yaw measurements are much more aligned with what is happening is gazebo, therefore we will be using them
+    # - it is helpful to include vy for non-holonomic robots as you can confidently trust that the value
+    #   should be zero, thus improving the fused odometry, as per https://github.com/methylDragon/ros-sensor-fusion-tutorial/blob/master/01%20-%20ROS%20and%20Sensor%20Fusion%20Tutorial.md#3.5
     odom0: /agent/wheel_odom
     odom0_config: [false, false, false,
                    false, false, false,
-                   true,  false, false, # vx only, vy=0 constraint on non-holonomic vehicles
-                   false, false, true, # vyaw
+                   true,  true, false,
+                   false, false, false, 
                    false, false, false]
 
-    odom0_queue_size: 5
+    odom0_queue_size: 10
     odom0_nodelay: false
     odom0_differential: false
     odom0_relative: false
     odom0_pose_use_child_frame: false
 
     ############## this is the LiDAR odom ##############
+    # - lidar odometry is able to accurately capture the slipping that is required for turning, so we want to include most 
+    #   measurements from this source
+    # - because we want to trust the IMU more for yaw, I am only including the vyaw
     odom1: /agent/lidar_odom_filtered
-    odom1_config: [true, true, false,  # x and y
-                  false, false, true, # yaw
-                  true, true, false,
+    odom1_config: [true, true, false,  
                   false, false, false,
+                  true, true, false,
+                  false, false, true,
                   false, false, false]
 
     odom1_queue_size: 5
     odom1_nodelay: false
-    odom1_differential: true
+    odom1_differential: false
     odom1_relative: false
     odom1_pose_use_child_frame: false
 
     ############# this is the IMU data ##############
+    # - the yaw of the IMU is used, despite the fact that there is no magnetometer present
+    # - on the X3, the manufacturer IMU filter has the magnetometer disabled
+    # - using vyaw only, ignoring vroll and vpitch due to 2D motion
     imu0: /agent/imu_data_filtered
     imu0_config: [false, false, false,
-                  false, false, false,  # set the yaw to true if magnetometer present
+                  false, false, true, 
                   false, false, false,
-                  false, false, true,   # vyaw only, ignore vroll/vpitch in 2D
-                  false,  false, false]    # ax, ignore ay due to non-holonomic ignore az in 2D
+                  false, false, true,  
+                  false,  false, false]
 
-    imu0_queue_size: 5
+    imu0_queue_size: 10
     imu0_nodelay: false
     imu0_differential: false
     imu0_relative: false
@@ -143,8 +152,8 @@ agent/ekf_filter_node:
     # to be larger, which will cause the filter to trust the incoming measurement more during correction. The values are
     # ordered as x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az. Defaults to the matrix below if
     # unspecified.
-    process_noise_covariance: [0.05,  0.0,  0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
-                              0.0,   0.05,  0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+    process_noise_covariance: [1e-3,  0.0,  0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+                              0.0,   1e-3,  0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
                               0.0,   0.0,   0.06,   0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
                               0.0,   0.0,   0.0,    0.03,   0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
                               0.0,   0.0,   0.0,    0.0,    0.03,   0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
