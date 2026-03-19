@@ -2,7 +2,7 @@
 <robot xmlns:xacro = "http://www.ros.org/wiki/xacro">
     <!-- PROPERTIES -->
     <xacro:property name = "mu1" value = "1.0"/>
-    <xacro:property name = "mu2" value = "0.1"/>
+    <xacro:property name = "mu2" value = "0.3"/>
     <xacro:property name = "minDepth" value = "0.0001"/>
     <xacro:property name = "piValue" value = "3.14159265359"/>
 
@@ -43,7 +43,7 @@
                     </horizontal>
                 </scan>
                 <range>
-                    <min>0.15</min>
+                    <min>0.13</min>
                     <max>12.0</max>
                 </range>
             </lidar>

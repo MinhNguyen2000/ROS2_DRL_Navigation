@@ -25,14 +25,14 @@ class DRLPolicyNode(Node):
         # TODO - declare and store ROS2 parameters/runtime arguments 
         self.declare_parameter('goal_tolerance', 0.5)
         self.declare_parameter('obstacle_tolerance', 0.20)
-        self.declare_parameter('model_name', 'SAC_001')
-        self.declare_parameter('max_lin_vel', 0.4)
-        self.declare_parameter('max_angular_vel', 0.6)
+        self.declare_parameter('model_name', 'TD3_001')
+        self.declare_parameter('max_lin_vel', 0.6)
+        self.declare_parameter('max_angular_vel', 0.9)
 
         self.default_goal_tolerance = self.get_parameter('goal_tolerance').value
         self.default_obstacle_tolerance = self.get_parameter('obstacle_tolerance').value
         self.model_name = self.get_parameter('model_name').value
-        self.model_type = self.model_name.split()
+        self.model_type = self.model_name.split('_')[0]
         self.max_lin_vel = self.get_parameter('max_lin_vel').value
         self.max_angular_vel = self.get_parameter('max_angular_vel').value
 
@@ -43,8 +43,10 @@ class DRLPolicyNode(Node):
         model_path = os.path.join(model_dir, "model")
         norm_stat_path = os.path.join(model_dir, "norm_stats.pkl")
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # model = TD3.load(model_path, device=self.device)
-        model = SAC.load(model_path, device=self.device)
+        if self.model_type == "TD3":
+            model = TD3.load(model_path, device=self.device)
+        elif self.model_type == "SAC":
+            model = SAC.load(model_path, device=self.device)
         self.policy = model.policy.actor
         self.policy.eval()
 
@@ -164,7 +166,7 @@ class DRLPolicyNode(Node):
         y_prev = self.latest_odom.pose.pose.position.y
         total_distance = 0.0
 
-        ctrl_freq = 100
+        ctrl_freq = 250
         ctrl_period = 1.0 / ctrl_freq
 
         while rclpy.ok():
@@ -299,8 +301,10 @@ class DRLPolicyNode(Node):
         # LIDAR min pooling
         raw = np.array(scan.ranges, dtype=np.float32)
         raw = np.where(np.isfinite(raw), raw, scan.range_max)       # replace inf/nan with max LiDAR range values
-        raw = raw[raw > 0.15]                             # drop anything below the minimum LiDAR scan range 
+        antennae_mask = raw < 0.15
+        raw[antennae_mask] = scan.range_max                         # drop anything below the minimum LiDAR scan range 
         raw = np.clip(raw, 0.0, scan.range_max)
+        raw = np.flip(raw)
         n_groups = 18           # TODO - dynamically modify this according to the model loaded
         lidar_groups    = np.array_split(raw, n_groups)
         lidar_obs       = np.array([g.min() for g in lidar_groups], dtype=np.float32)
@@ -391,15 +395,11 @@ class DRLPolicyNode(Node):
                                f"r_time: {self.rew_time: 4.2f} | "
                                f"r_total: {rew: 5.3f}  ")
 
-
-
     def _run_policy(self, obs: np.ndarray) -> np.ndarray:
         with torch.no_grad():
             obs_tensor = torch.from_numpy(obs).unsqueeze(0).to(self.device)
-            # action = self.policy.mu(obs_tensor).squeeze(0).cpu().numpy()
-            action = self.policy.latent_pi(obs_tensor)
-            action = self.policy.mu(action).squeeze(0).cpu().numpy()
-        return action
+            action = self.policy(obs_tensor)
+        return action.squeeze(0).cpu().numpy()
 
 def main():
     rclpy.init()
