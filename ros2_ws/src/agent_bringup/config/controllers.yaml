@@ -38,6 +38,6 @@ agent/diff_controller:
     publish_rate: 30.0
 
     # these are the covariances for the diff_drive controller:
-    pose_covariance_diagonal: [0.1, 0.1, 1.0, 1.0, 1.0, 0.01]
-    twist_covariance_diagonal: [0.1, 0.1, 1.0, 1.0, 1.0, 0.01]
+    pose_covariance_diagonal: [1.0, 1.0, 1.0, 1.0, 1.0, 0.1]
+    twist_covariance_diagonal: [0.1, 0.1, 1.0, 1.0, 1.0, 0.1]
 
