@@ -26,12 +26,13 @@ class DRLPolicyNode(Node):
         self.declare_parameter('goal_tolerance', 0.5)
         self.declare_parameter('obstacle_tolerance', 0.20)
         self.declare_parameter('model_name', 'SAC_001')
-        self.declare_parameter('max_lin_vel', 0.02)
-        self.declare_parameter('max_angular_vel', 0.03)
+        self.declare_parameter('max_lin_vel', 0.4)
+        self.declare_parameter('max_angular_vel', 0.6)
 
         self.default_goal_tolerance = self.get_parameter('goal_tolerance').value
         self.default_obstacle_tolerance = self.get_parameter('obstacle_tolerance').value
         self.model_name = self.get_parameter('model_name').value
+        self.model_type = self.model_name.split()
         self.max_lin_vel = self.get_parameter('max_lin_vel').value
         self.max_angular_vel = self.get_parameter('max_angular_vel').value
 

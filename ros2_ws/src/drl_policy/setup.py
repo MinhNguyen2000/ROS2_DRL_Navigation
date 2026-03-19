@@ -36,6 +36,7 @@ setup(
     entry_points={
         'console_scripts': [
             'policy_node = drl_policy.policy_node:main',
+            'goal_client = drl_policy.goal_client:main',
         ],
     },
 )
