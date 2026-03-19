@@ -160,6 +160,10 @@ class DRLPolicyNode(Node):
         feedback_msg = NavigateToGoal.Feedback()
         result_msg = NavigateToGoal.Result()
 
+        x_prev = self.latest_odom.pose.pose.position.x
+        y_prev = self.latest_odom.pose.pose.position.y
+        total_distance = 0.0
+
         ctrl_freq = 100
         ctrl_period = 1.0 / ctrl_freq
 
@@ -182,14 +186,14 @@ class DRLPolicyNode(Node):
             # --- 1. Extract + Normalize observation ---
             obs = self._get_obs(self.latest_odom, target, self.latest_scan)
 
+            obs_normed = self._normalize_obs(obs)
+            
             self.get_logger().info(
                 f'obs → ({obs[0]: 5.3f} | {obs[1]: 5.3f} | {obs[2]: 5.3f})   '
                 f'({np.atan2(obs[4], obs[3]): 5.3f} | {np.atan2(obs[6], obs[5]): 5.3f})   '
                 f'({obs[7]: 5.3f}|{obs[8]: 5.3f})   '
                 f'lidar:{obs[9:]}'
             )
-
-            obs_normed = self._normalize_obs(obs)
 
             # --- 2. Check termination conditions ---
             d_goal = obs[2]
@@ -200,6 +204,7 @@ class DRLPolicyNode(Node):
                 goal_handle.succeed()
                 result_msg.success=True
                 result_msg.message='Goal reached.'
+                result_msg.total_distance=float(total_distance)
                 self.get_logger().info('Goal reached.')
                 return result_msg
             
@@ -207,7 +212,8 @@ class DRLPolicyNode(Node):
                 self.cmd_pub.publish(TwistStamped())
                 goal_handle.abort()
                 result_msg.success=False
-                result_msg.message='Obstalce hit, mission aborted.'
+                result_msg.message='Obstacle hit, mission aborted.'
+                result_msg.total_distance=float(total_distance)
                 self.get_logger().info(f'Obstacle hit with min_lidar={min_lidar: 5.3f}, mission aborted.')
                 return result_msg
             
@@ -233,6 +239,13 @@ class DRLPolicyNode(Node):
             feedback_msg.elapsed_time = float(time.time() - start)
             feedback_msg.current_pose = self.latest_odom.pose.pose
             goal_handle.publish_feedback(feedback_msg)
+
+            # --- Extra: Find total distance travelled over the last step
+            x = self.latest_odom.pose.pose.position.x
+            y = self.latest_odom.pose.pose.position.y
+            step_distance = np.sqrt((x - x_prev) ** 2 + (y - y_prev) ** 2)
+            total_distance += step_distance
+            x_prev, y_prev = x, y
 
             # --- Manage control frequency
             ctrl_iter_elapsed = time.time() - ctrl_iter_start

@@ -55,7 +55,8 @@ class GoalClient(Node):
 
     def result_callback(self, future):
         result = future.result().result
-        self.get_logger().info(f'Result: {result.message}')
+        self.get_logger().info(
+            f'{result.message} | Total distance travelled: {result.total_distance: 5.3f}')
         self._done = True
 
 
