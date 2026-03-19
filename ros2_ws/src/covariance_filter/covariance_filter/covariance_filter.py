@@ -43,7 +43,7 @@ class CovFilter(Node):
         # orientation covariance row majors, in the order of (roll, pitch, yaw)
         self.imu_orientation_covariance = [1.0, 0.0, 0.0,
                                            0.0, 1.0, 0.0,
-                                           0.0, 0.0, 1.0]
+                                           0.0, 0.0, 1e-2]
         # angular velocity covariance row majors, in the order of (vroll, vpitch, vyaw)
         self.imu_angular_velocity_covariance = [1.0, 0.0, 0.0,
                                                 0.0, 1.0, 0.0,
@@ -55,19 +55,19 @@ class CovFilter(Node):
         
         # LiDAR covariances - as per https://docs.ros2.org/foxy/api/nav_msgs/msg/Odometry.html
         # pose covariance, in the order of (x, y, z, r, p, y)
-        self.lidar_pose_covariance = [1e-4,   0.0,   0.0, 0.0, 0.0, 0.0,
-                                      0.0,    1e-4,  0.0, 0.0, 0.0, 0.0,
+        self.lidar_pose_covariance = [0.1,   0.0,   0.0, 0.0, 0.0, 0.0,
+                                      0.0,    0.1,  0.0, 0.0, 0.0, 0.0,
                                       0.0,    0.0,   1.0, 0.0, 0.0, 0.0,
                                       0.0,    0.0,   0.0, 1.0, 0.0, 0.0,
                                       0.0,    0.0,   0.0, 0.0, 1.0, 0.0,
-                                      0.0,    0.0,   0.0, 0.0, 0.0, 1e-4]
+                                      0.0,    0.0,   0.0, 0.0, 0.0, 1e-2]
         # twist covariance, in the order of (vx, vy, vz, vr, vp, vy)
         self.lidar_twist_covariance = [1e-2, 0.0,  0.0,  0.0,  0.0,  0.0,
                                       0.0,  1e-2,  0.0,  0.0,  0.0,  0.0,
                                       0.0,  0.0,  1.0,  0.0,  0.0,  0.0,
                                       0.0,  0.0,  0.0,  1.0,  0.0,  0.0,
                                       0.0,  0.0,  0.0,  0.0,  1.0,  0.0,
-                                      0.0,  0.0,  0.0,  0.0,  0.0,  1e-2]
+                                      0.0,  0.0,  0.0,  0.0,  0.0,  1e-3]
 
     def imu_callback(self, msg):
         msg_fixed = copy.deepcopy(msg)
