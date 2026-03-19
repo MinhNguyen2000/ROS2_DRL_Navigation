@@ -37,13 +37,13 @@ class GoalClient(Node):
 
     def goal_accepted_callback(self, future: Future):
         '''Actions performed on client side when the server receives the goal'''
-        goal_handle = future.result()
-        if not goal_handle.accepted:
+        self._goal_handle = future.result()
+        if not self._goal_handle.accepted:
             self.get_logger().info('Goal rejected :(')
             return
         
         self.get_logger().info('Goal accepted')
-        goal_handle.get_result_async().add_done_callback(self.result_callback)
+        self._goal_handle.get_result_async().add_done_callback(self.result_callback)
 
     def feedback_callback(self, feedback):
         '''Acknowledging methods whenever the server send a feedback'''
@@ -59,9 +59,21 @@ class GoalClient(Node):
             f'{result.message} | Total distance travelled: {result.total_distance: 5.3f}')
         self._done = True
 
+    def cancel(self):
+        self.get_logger().info('Sending cancel request to the server...')
+        cancel_future = self._goal_handle.cancel_goal_async()
+
+        while rclpy.ok() and not cancel_future.done():
+            rclpy.spin_once(self, timeout_sec=0.1)
+        
+        cancel_response = cancel_future.result()
+        if cancel_response:
+            self.get_logger().info('Cancel acknowledged by server.')
+        else:
+            self.get_logger().warn('Cancel request was rejected by server.')
 
 def main():
-    rclpy.init()
+    rclpy.init(signal_handler_options=rclpy.SignalHandlerOptions.NO)
 
     # Usage -> ros2 run drl_policy goal_client 3.0 2.0 0.5
     user_args = rclpy.utilities.remove_ros_args(sys.argv)[1:]
@@ -70,10 +82,15 @@ def main():
     goal_tolerance = float(user_args[2]) if len(user_args) > 2 else 0.2
 
     node = GoalClient(x, y, goal_tolerance)
-    while rclpy.ok() and not node._done:
-        rclpy.spin_once(node, timeout_sec=0.1)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        while rclpy.ok() and not node._done:
+            rclpy.spin_once(node, timeout_sec=0.1)
+    except KeyboardInterrupt:
+        node.cancel()
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == "__main__":
     main()
