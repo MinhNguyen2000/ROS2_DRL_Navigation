@@ -1,13 +1,15 @@
 # import packages:
 import sys
 import os
+import time
 import threading
 import signal
+import subprocess
 import rclpy
 from rclpy.node import Node
 from ament_index_python.packages import get_package_share_directory
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QComboBox, QPushButton
-from PyQt5.QtCore import QTimer, Qt
+from PyQt5.QtCore import QTimer, Qt, pyqtSignal
 
 # node class:
 class GuiNode(Node):
@@ -20,6 +22,9 @@ class GuiNode(Node):
 
 # this is a class which serves as the WINDOW:
 class MainWindow(QWidget):
+    # signal for updating GUI from background threads:
+    navigation_finished = pyqtSignal()
+
     # constructor for window:
     def __init__(self):
         # inherit from parent type:
@@ -52,7 +57,7 @@ class MainWindow(QWidget):
 
         # grid 2 - model selection:
         grid2.addWidget(QLabel("model"),  0, 0, alignment = Qt.AlignCenter)     # add the label to the grid
-        combo_box = QComboBox()                                                 # instantiate the ComboBox
+        self.combo_box = QComboBox()                                                 # instantiate the ComboBox
         policy_path = get_package_share_directory("drl_policy")                 # define the path to the policy which contains the models
         model_path = os.path.join(policy_path, "policy")                        # get the path of the model directory
         models = os.listdir(model_path)                                         # list out the models within this directory
@@ -60,15 +65,15 @@ class MainWindow(QWidget):
         # for every model in the directory:
         for model in models:
             # add the model to the ComboBox:
-            combo_box.addItem(model)
+            self.combo_box.addItem(model)
 
         # add the ComboBox to the grid:
-        grid2.addWidget(combo_box, 1, 0, alignment = Qt.AlignCenter)
+        grid2.addWidget(self.combo_box, 1, 0, alignment = Qt.AlignCenter)
 
         # row 1 - button for navigation:
-        nav_button = QPushButton("navigate!")
-        nav_button.clicked.connect(self._on_button_clicked)
-        row1.addWidget(nav_button)
+        self.nav_button = QPushButton("navigate!")
+        self.nav_button.clicked.connect(self._on_button_clicked)
+        row1.addWidget(self.nav_button)
 
         # add the grids/rows to the outer layout:
         main_layout.addLayout(grid1)
@@ -78,10 +83,58 @@ class MainWindow(QWidget):
         # apply the layout:
         self.setLayout(main_layout)
 
+        # connect signal:
+        self.navigation_finished.connect(self._on_navigation_finished)
+
     # function that the button is to execute:
     def _on_button_clicked(self):
-        print(f"button was pressed!") 
-    
+        # I think that this navigation button should launch both the policy node and the goal client.
+        # - it should append the model type to the policy node
+        # - it should pull values from the class to populate the goal client
+        # - it should listen to the goal client and its feedback, and if the navigation either fails or was successful,
+        #   it should shut down both the goal client and the policy node.
+        
+        # lock user out while button is running:
+        self.nav_button.setEnabled(False)
+        self.nav_button.setText("Running...")
+
+        # gather the values needed to launch:
+        model_name = self.combo_box.currentText()
+        x = self.x_input.text()
+        y = self.y_input.text()
+        tolerance = self.tolerance_input.text()
+
+        # launch the policy node:
+        self.policy_process = subprocess.Popen(["ros2", "run", "drl_policy", "policy_node",
+                                                "--ros-args", "-p", f"model_name:={model_name}"], 
+                                                start_new_session = True
+                                                )
+        
+        # launch the goal client:
+        self.goal_process = subprocess.Popen(["ros2", "run", "drl_policy", "goal_client", x, y, tolerance])
+
+        # monitor in a thread so the GUI does not kill itself:
+        threading.Thread(target = self._monitor_process, daemon = True).start()
+
+    # method for monitoring if navigation is done:
+    def _monitor_process(self):
+        # wait for the goal process to finish, then kill nodes:
+        self.goal_process.wait()
+        os.killpg(os.getpgid(self.policy_process.pid), signal.SIGTERM)
+        self.policy_process.wait()
+
+        # self.nav_button.setText("Cleaning up...")
+        # time.sleep(4.0)
+
+        # re-enable the button from background thread safely using a signal:
+        self.navigation_finished.emit()
+
+    # method for re-enabling the button:
+    def _on_navigation_finished(self):
+        # modify the button state:
+        self.nav_button.setEnabled(True)
+        self.nav_button.setText("Navigate")
+        
 # define the main execution of the node:
 def main():
     # initialize rclpy:
