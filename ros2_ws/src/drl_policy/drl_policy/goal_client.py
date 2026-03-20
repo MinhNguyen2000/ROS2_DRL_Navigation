@@ -68,9 +68,9 @@ class GoalClient(Node):
         
         cancel_response = cancel_future.result()
         if cancel_response:
-            self.get_logger().info('Cancel acknowledged by server.')
+            self.get_logger().info('Cancel acknowledged by the server.')
         else:
-            self.get_logger().warn('Cancel request was rejected by server.')
+            self.get_logger().warn('Cancel request rejected by the server.')
 
 def main():
     rclpy.init(signal_handler_options=rclpy.SignalHandlerOptions.NO)

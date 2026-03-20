@@ -1,0 +1,17 @@
+# Request / Goal
+geometry_msgs/PoseStamped[] waypoints
+float32 goal_tolerance
+bool stop_on_failure                # abort the whole sequence upon any failure
+---
+# Result
+bool success
+string message
+float32 total_distance
+int32 waypoints_completed
+---
+# Feedback
+int32 current_waypoint
+int32 total_waypoints
+float32 distance_to_current_goal
+float32 elapsed_time
+geometry_msgs/Pose current_pose

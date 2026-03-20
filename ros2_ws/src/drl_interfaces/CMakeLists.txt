@@ -15,6 +15,7 @@ find_package(geometry_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/NavigateToGoal.action"
+  "action/NavigateToGoalSequence.action"
   DEPENDENCIES geometry_msgs
 )
 

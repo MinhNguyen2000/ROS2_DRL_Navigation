@@ -20,7 +20,7 @@ import copy
 
 class DRLPolicyNode(Node):
     def __init__(self):
-        super().__init__('drl_policy_node')
+        super().__init__('drl_policy_server')
 
         # TODO - declare and store ROS2 parameters/runtime arguments 
         self.declare_parameter('goal_tolerance', 0.5)

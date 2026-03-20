@@ -37,6 +37,8 @@ setup(
         'console_scripts': [
             'policy_node = drl_policy.policy_node:main',
             'goal_client = drl_policy.goal_client:main',
+            'goal_sequence_server = drl_policy.goal_sequence_server:main',
+            'goal_sequence_client = drl_policy.goal_sequence_client:main',
         ],
     },
 )
