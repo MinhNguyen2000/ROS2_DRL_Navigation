@@ -127,7 +127,7 @@ def generate_launch_description():
             "base_frame_id" : f"{agent_name}_base_link",
             "odom_frame_id" : "odom",
             "init_pose_from_topic" : "",
-            "freq" : 30.0}],
+            "freq" : 60.0}],
         condition = IfCondition(use_ros_control)
     )
 
