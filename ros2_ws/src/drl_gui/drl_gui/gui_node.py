@@ -1,11 +1,13 @@
 # import packages:
 import sys
+import os
 import threading
 import signal
 import rclpy
 from rclpy.node import Node
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton
-from PyQt5.QtCore import QTimer
+from ament_index_python.packages import get_package_share_directory
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QComboBox, QPushButton
+from PyQt5.QtCore import QTimer, Qt
 
 # node class:
 class GuiNode(Node):
@@ -27,28 +29,58 @@ class MainWindow(QWidget):
         self.setWindowTitle("ROS2 DRL GUI")
 
         # this is a layout manager, which lives inside the widget (QWidget):
-        layout = QVBoxLayout()
+        main_layout = QVBoxLayout() # this will be the outer layout, stacking rows vertically
+       
+        # instantiate a series of child layouts:
+        grid1 = QGridLayout()     # this is a 2,3 grid, used for the x, y, and tolerance inputs
+        grid2 = QGridLayout()     # this is a 2,1 grid, used for selecting the model
+        row1 = QHBoxLayout()      # this is a single row that will contain the navigation button
 
-        # this is a child widget:
-        self.input_field = QLineEdit() 
-        self.input_field.setPlaceholderText("enter into this field")
+        # need to define what each row/grid contains now:
+        # grid 1 - goal parameters:
+        grid1.addWidget(QLabel("x"),         0, 0, alignment = Qt.AlignCenter)
+        grid1.addWidget(QLabel("y"),         0, 1, alignment = Qt.AlignCenter)
+        grid1.addWidget(QLabel("tolerance"), 0, 2, alignment = Qt.AlignCenter)
 
-        # add the child widget to the layout manager, along with a label:
-        layout.addWidget(QLabel("input: ")) 
-        layout.addWidget(self.input_field)
+        self.x_input = QLineEdit()
+        self.y_input = QLineEdit()
+        self.tolerance_input = QLineEdit()
 
-        # add a button: 
-        self.button = QPushButton("button") # add a child widget
-        self.button.clicked.connect(self._on_button_clicked)    # add a functionality to the button, which is defined as a function
-        layout.addWidget(self.button)   # add the parent to the child
+        grid1.addWidget(self.x_input,         1, 0)
+        grid1.addWidget(self.y_input,         1, 1)
+        grid1.addWidget(self.tolerance_input, 1, 2)
+
+        # grid 2 - model selection:
+        grid2.addWidget(QLabel("model"),  0, 0, alignment = Qt.AlignCenter)     # add the label to the grid
+        combo_box = QComboBox()                                                 # instantiate the ComboBox
+        policy_path = get_package_share_directory("drl_policy")                 # define the path to the policy which contains the models
+        model_path = os.path.join(policy_path, "policy")                        # get the path of the model directory
+        models = os.listdir(model_path)                                         # list out the models within this directory
+
+        # for every model in the directory:
+        for model in models:
+            # add the model to the ComboBox:
+            combo_box.addItem(model)
+
+        # add the ComboBox to the grid:
+        grid2.addWidget(combo_box, 1, 0, alignment = Qt.AlignCenter)
+
+        # row 1 - button for navigation:
+        nav_button = QPushButton("navigate!")
+        nav_button.clicked.connect(self._on_button_clicked)
+        row1.addWidget(nav_button)
+
+        # add the grids/rows to the outer layout:
+        main_layout.addLayout(grid1)
+        main_layout.addLayout(grid2)
+        main_layout.addLayout(row1)
 
         # apply the layout:
-        self.setLayout(layout)
+        self.setLayout(main_layout)
 
     # function that the button is to execute:
     def _on_button_clicked(self):
-        text = self.input_field.text()
-        print(f"button clicked, input was: {text}") 
+        print(f"button was pressed!") 
     
 # define the main execution of the node:
 def main():
