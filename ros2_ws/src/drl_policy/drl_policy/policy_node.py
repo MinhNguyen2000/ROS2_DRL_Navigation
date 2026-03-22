@@ -166,7 +166,7 @@ class DRLPolicyNode(Node):
         y_prev = self.latest_odom.pose.pose.position.y
         total_distance = 0.0
 
-        ctrl_freq = 250
+        ctrl_freq = 50
         ctrl_period = 1.0 / ctrl_freq
 
         while rclpy.ok():

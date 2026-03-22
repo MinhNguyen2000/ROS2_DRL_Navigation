@@ -4,13 +4,17 @@ from rclpy.node import Node
 from rclpy.task import Future
 from rclpy.action import ActionClient
 from geometry_msgs.msg import PoseStamped
+from ament_index_python.packages import get_package_share_directory
 
 from drl_interfaces.action import NavigateToGoalSequence
 
-PATHS: dict[str, list[tuple[float, float]]] = {
-    "path_1": [(2.0, 1.0), (5.0, 1.0), (6.0, 6.0), (2.0, 5.0), [0.0, 0.0]],
-    "path_2": [(2.0, 1.0), (5.0, 1.0), (6.0, 6.0), (2.0, 5.0), [0.0, 0.0]]
-}
+import os, json
+
+# --- Load the paths
+pkg_dir = get_package_share_directory('drl_policy')
+path_file = os.path.join(pkg_dir, 'paths', 'paths.json')
+with open(path_file, 'r') as f:
+    PATHS = json.load(f)
 
 class GoalSequenceClient(Node):
     def __init__(self,
@@ -47,12 +51,13 @@ class GoalSequenceClient(Node):
 
         # --- Create the goals ---
         goal = NavigateToGoalSequence.Goal()
+        goal.path_name = path_name
         goal.waypoints = [self._make_pose(x, y) for x, y in waypoints]
         goal.goal_tolerance = goal_tolerance
         goal.stop_on_failure = stop_on_failure
 
         # --- Send goal ---
-        self.get_logger().info("Sending path: '{path_name}'")
+        self.get_logger().info(f"Sending path: '{path_name}'")
         self._send_future = self._client.send_goal_async(
             goal,
             feedback_callback=self._feedback_callback

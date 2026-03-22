@@ -5,12 +5,17 @@ from rclpy.action.server import ServerGoalHandle
 from rclpy.action.client import ClientGoalHandle
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor       # to prevent blocking code while navigating to the goal
+from rcl_interfaces.srv import GetParameters
 
 from drl_interfaces.action import NavigateToGoal, NavigateToGoalSequence
+from std_srvs.srv import SetBool
+from geometry_msgs.msg import Quaternion
 
+import os, json
 import time
+import numpy as np
 
-class GoalSequenceNode(Node):
+class GoalSequenceServer(Node):
     '''
     Accepts a NavigateToGoalSequence action containing a list of waypoints and
     dispatches each waypoint sequentially to the drl_policy policy_node server
@@ -41,6 +46,28 @@ class GoalSequenceNode(Node):
             callback_group=self._callback_group
         )
 
+        # Service client to grab model_name parameter from the drl_policy_server
+        self._param_client = self.create_client(
+            GetParameters,
+            '/drl_policy_server/get_parameters'
+        )
+        
+        if self._param_client.wait_for_service(timeout_sec=0.5):
+            self._fetch_model_name()
+        else:
+            self.get_logger().warn('Could not reach policy_node to fecth model name')
+
+        # Service server to save the trajectory from previous run
+        self._save_srv = self.create_service(
+            SetBool,
+            'save_path',
+            self._save_callback
+        )
+
+        self._pose_buffer = []
+        self._elapsed_time = 0.0
+        self._total_distance = 0.0
+
         self.get_logger().info('Goal sequence server ready')
 
         self.get_logger().info('Waiting for DRL policy server...')
@@ -52,6 +79,7 @@ class GoalSequenceNode(Node):
         to reject the goal (due to errors in the request) or accept
         '''
         n = len(goal_request.waypoints)
+        self._path_name = goal_request.path_name
 
         if n == 0:
             self.get_logger().warn('Received empty goal lists - rejecting')
@@ -59,7 +87,7 @@ class GoalSequenceNode(Node):
         self.get_logger().info(f'Accepting sequence of {n} goal(s)')
         return GoalResponse.ACCEPT
 
-    def _cancel_callback(self):
+    def _cancel_callback(self, goal_handle):
         self.get_logger().info('Goal sequence navigation cancel requested!')
         return CancelResponse.ACCEPT
     
@@ -69,6 +97,8 @@ class GoalSequenceNode(Node):
         to the DRL policy node action server for each waypoint and wait for 
         the result
         '''
+
+        self._pose_buffer = []  # clear the pose trajectory
 
         request         = seq_goal_handle.request
         waypoints       = request.waypoints
@@ -81,6 +111,7 @@ class GoalSequenceNode(Node):
         result_msg      = NavigateToGoalSequence.Result()
         result_msg.total_distance = 0.0
         result_msg.waypoints_completed = 0
+        self._total_distance = 0.0
 
         start = time.time()
 
@@ -133,6 +164,7 @@ class GoalSequenceNode(Node):
             nav_result      = result_future.result
 
             result_msg.total_distance += nav_result.total_distance
+            self._total_distance = result_msg.total_distance
 
             # --- Check for navigation success (1 goal) --- 
             if nav_result.success:
@@ -148,12 +180,11 @@ class GoalSequenceNode(Node):
                 
         # --- Check if all waypoints done (all goals) ---
         all_waypoints = result_msg.waypoints_completed == total
+        self._elapsed_time = time.time() - start
         seq_goal_handle.succeed()
         result_msg.success = all_waypoints
         result_msg.message = 'All waypoints completed' if all_waypoints else f'Completed {result_msg.waypoints_completed}/{total} waypoints.'
         return result_msg
-
-
 
     def _relay_feedback(self, 
                         nav_feedback_handle,
@@ -167,7 +198,6 @@ class GoalSequenceNode(Node):
         Forward feedback from the DRL policy action server to the sequence
         caller
         '''
-
         
         feedback_msg.current_waypoint = current_idx
         feedback_msg.total_waypoints = total
@@ -180,9 +210,54 @@ class GoalSequenceNode(Node):
 
         seq_goal_handle.publish_feedback(feedback_msg)
 
+        self._pose_buffer.append({
+            "x": round(fb.current_pose.position.x, 3),
+            "y": round(fb.current_pose.position.y, 3),
+            "yaw": round(self._yaw_from_quaternion(fb.current_pose.orientation), 3)
+        })  
+    
+    def _fetch_model_name(self):
+        request = GetParameters.Request()
+        request.names = ['model_name']
+        future = self._param_client.call_async(request)
+        future.add_done_callback(self._model_name_callback)
+
+    def _model_name_callback(self, future):
+        try:
+            response = future.result()
+            self._model_name = response.values[0].string_value
+            self.get_logger().info(f'Navigating using model {self._model_name}')
+        except Exception as e:
+            self.get_logger().error(f'Failed to fetch model name: {e}')
+
+    def _save_callback(self, request, response):
+        pkg_dir = os.path.dirname(os.path.abspath(__file__))
+        record_path_name = f"{self._model_name}_{self._path_name}.json"
+        save_path = os.path.join(pkg_dir, '..', 'recorded_paths', record_path_name)
+
+        data = {
+            "model_name":       self._model_name,
+            "path_name":        self._path_name,
+            "elapsed_time":     self._elapsed_time,
+            "total_distance":   self._total_distance,
+            "poses":            self._pose_buffer,
+        }
+        
+        with open(save_path, 'w') as f:
+            json.dump(data, f, indent=2)
+        
+        self.get_logger().info(f'Save {len(self._pose_buffer)} poses to {save_path}')
+        response.success = True
+        return response
+    
+    def _yaw_from_quaternion(self, q: Quaternion) -> float:
+        siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1.0 - 2.0 * (q.y**2 + q.z**2)
+        return float(np.atan2(siny_cosp, cosy_cosp, dtype=np.float32))
+
 def main():
     rclpy.init()
-    node = GoalSequenceNode()
+    node = GoalSequenceServer()
     executor = MultiThreadedExecutor()
     executor.add_node(node)
 

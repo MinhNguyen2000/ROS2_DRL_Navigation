@@ -20,7 +20,8 @@ setup(
             )
             for f in glob('policy/**/*', recursive=True)
             if os.path.isfile(f)
-        ]
+        ],
+        ('share/' + package_name + '/paths', ['paths/paths.json'])
     ],
     install_requires=['setuptools'],
     zip_safe=True,

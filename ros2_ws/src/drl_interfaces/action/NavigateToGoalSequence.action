@@ -1,4 +1,5 @@
 # Request / Goal
+string path_name
 geometry_msgs/PoseStamped[] waypoints
 float32 goal_tolerance
 bool stop_on_failure                # abort the whole sequence upon any failure
