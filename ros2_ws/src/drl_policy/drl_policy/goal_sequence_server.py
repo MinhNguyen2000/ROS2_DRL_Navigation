@@ -8,7 +8,7 @@ from rclpy.executors import MultiThreadedExecutor       # to prevent blocking co
 from rcl_interfaces.srv import GetParameters
 
 from drl_interfaces.action import NavigateToGoal, NavigateToGoalSequence
-from std_srvs.srv import SetBool
+from std_srvs.srv import Trigger
 from geometry_msgs.msg import Quaternion
 
 import os, json
@@ -59,7 +59,7 @@ class GoalSequenceServer(Node):
 
         # Service server to save the trajectory from previous run
         self._save_srv = self.create_service(
-            SetBool,
+            Trigger,
             'save_path',
             self._save_callback
         )
@@ -230,7 +230,7 @@ class GoalSequenceServer(Node):
         except Exception as e:
             self.get_logger().error(f'Failed to fetch model name: {e}')
 
-    def _save_callback(self, request, response):
+    def _save_callback(self, request: Trigger.Request, response: Trigger.Response):
         pkg_dir = os.path.dirname(os.path.abspath(__file__))
         record_path_name = f"{self._model_name}_{self._path_name}.json"
         save_path = os.path.join(pkg_dir, '..', 'recorded_paths', record_path_name)
@@ -246,8 +246,9 @@ class GoalSequenceServer(Node):
         with open(save_path, 'w') as f:
             json.dump(data, f, indent=2)
         
-        self.get_logger().info(f'Save {len(self._pose_buffer)} poses to {save_path}')
         response.success = True
+        response.message = f'Save {len(self._pose_buffer)} poses to {save_path}'
+        self.get_logger().info(response.message)
         return response
     
     def _yaw_from_quaternion(self, q: Quaternion) -> float:
@@ -266,7 +267,8 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        node.destroy_node()
+        if rclpy.ok():
+            node.destroy_node()
         rclpy.shutdown()
 
 if __name__ == "__main__":
