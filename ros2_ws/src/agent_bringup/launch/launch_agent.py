@@ -50,6 +50,20 @@ def generate_launch_description():
         description = "Name of the world to be loaded, defaulting to empty_world.sdf"
     )
 
+    x_offset = LaunchConfiguration("x_offset")
+    x_offset_arg = DeclareLaunchArgument(
+        "x_offset",
+        default_value = "-3.0",
+        description = "The robot x position at spawn"
+    )
+
+    y_offset = LaunchConfiguration("y_offset")
+    y_offset_arg = DeclareLaunchArgument(
+        "y_offset",
+        default_value = "-3.0",
+        description = "The robot y position at spawn"
+    )
+
     # set the required parameters:
     agent_name = "agent"
     robot_description = Command(["xacro ", xacro_path, " agent_name:=", agent_name, " use_ros_control:=", use_ros_control])
@@ -76,8 +90,8 @@ def generate_launch_description():
         arguments = [
                     "-topic", f"robot_description",
                     "-name", agent_name,
-                    "-x", "-3.0",
-                    "-y", "-3.0",
+                    "-x", x_offset,
+                    "-y", y_offset,
                     "-z", "0.0"],
         output = "screen"
     )
@@ -123,6 +137,8 @@ def generate_launch_description():
         use_sim_time_arg,
         use_ros_control_arg,
         world_arg,
+        x_offset_arg,
+        y_offset_arg,
         rsp,
         gazebo,
         agent_spawner,
