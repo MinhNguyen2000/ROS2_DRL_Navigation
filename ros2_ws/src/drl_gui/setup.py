@@ -15,7 +15,7 @@ setup(
     zip_safe=True,
     maintainer='matthew',
     maintainer_email='mtidd2@unb.ca',
-    description='This package launches a GUI that serves as the main modality for interacting with the policy node and deploying the trained   DRL policy on the agent',
+    description='This package launches a GUI that serves as the main modality for interacting with the policy node and deploying the trained DRL policy on the agent',
     license='Apache-2.0',
     extras_require={
         'test': [
