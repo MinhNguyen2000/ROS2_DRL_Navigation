@@ -147,46 +147,48 @@ class MainWindow(QWidget):
             print("Please launch Gazebo before attempting navigation.")
             self.navigation_finished.emit()
             return
+            
+        # now check to see what mode we are in:
+        if not self.mode_toggle.isChecked():    # this is p2p mode
+            # check to see if there are empty fields:
+            if not x or not y or not tolerance:
+                print("Please populate missing values for navigation.")
+                self.navigation_finished.emit()
+                return
+            # otherwise launch goal client:
+            else:
+                # set mode:
+                mode = "p2p"
+
+                # launch the policy node:
+                self.policy_process = subprocess.Popen(["ros2", "run", "drl_policy", "policy_node",
+                                                        "--ros-args", "-p", f"model_name:={model_name}"], 
+                                                        start_new_session = True)
+                # launch the goal client:
+                self.goal_process = subprocess.Popen(["ros2", "run", "drl_policy", "goal_client", x, y, tolerance])
+
+                # monitor in a thread so the GUI does not kill itself:
+                threading.Thread(target = self._monitor_process, args = (mode, ), daemon = True).start()
+        # this is the path navigation mode:
         else:
+            # set mode:
+            mode = "path"
+
             # launch the policy node:
             self.policy_process = subprocess.Popen(["ros2", "run", "drl_policy", "policy_node",
                                                     "--ros-args", "-p", f"model_name:={model_name}"], 
                                                     start_new_session = True)
             
-        # now check to see what mode we are in:
-        if not self.mode_toggle.isChecked():    # this is p2p mode
-            # set the mode of navigation:
-            # mode = "p2p"
+            time.sleep(1)
+            # launch the goal_sequence_server:
+            self.goal_sequence_server = subprocess.Popen(["ros2", "run", "drl_policy", "goal_sequence_server"],
+                                                          start_new_session = True)
 
-            # check to see if there are empty fields:
-            if not x or not y or not tolerance:
-                print("Please populate missing values for navigation.")
-                self.navigation_finished.emit()
-            # otherwise launch goal client:
-            else:
-                # launch the goal client:
-                self.goal_process = subprocess.Popen(["ros2", "run", "drl_policy", "goal_client", x, y, tolerance])
-
-                # monitor in a thread so the GUI does not kill itself:
-                threading.Thread(target = self._monitor_process, daemon = True).start()
-        # this is the path navigation mode:
-        else:
-            # for debugging:
-            print(f"path mode")
-            self.navigation_finished.emit()
-
-
-            # set the mode of navigation:
-            # mode = "path"
-
-            # # launch the goal_sequence_server:
-            # self.goal_sequence_server = subprocess.Popen(["ros2", "run", "drl_policy", "goal_sequence_server"])
-
-            # # launch the goal sequence client:
-            # self.goal_sequence_client = subprocess.Popen(["ros2", "run", "drl_policy", "goal_sequence_client", path_name, tolerance, "false"])
+            # launch the goal sequence client:
+            self.goal_sequence_client = subprocess.Popen(["ros2", "run", "drl_policy", "goal_sequence_client", path_name, tolerance, "false"])
             
-            # # monitor in a thread so the GUI does not kill itself:
-            # threading.Thread(target = self._monitor_process(mode), daemon = True).start()
+            # monitor in a thread so the GUI does not kill itself:
+            threading.Thread(target = self._monitor_process, args = (mode, ), daemon = True).start()
 
     # function that the reset button is to execute:
     def _on_reset_button_clicked(self):
@@ -198,12 +200,37 @@ class MainWindow(QWidget):
         threading.Thread(target = self._reset_process, daemon = True).start()
 
     # method for monitoring if navigation is done:
-    def _monitor_process(self):
-        # wait for the goal process to finish, then kill nodes:
-        self.goal_process.wait()
+    def _monitor_process(self, mode):
+        # kill executables depending on mode:
+        if mode == "path":
+            self.goal_sequence_client.wait()
+            os.killpg(os.getpgid(self.goal_sequence_server.pid), signal.SIGTERM)
+            self.goal_sequence_server.wait()
+        elif mode == "p2p":
+            self.goal_process.wait()
+
+        # kill drl_policy:
+        time.sleep(2)
         os.killpg(os.getpgid(self.policy_process.pid), signal.SIGTERM)
         self.policy_process.wait()
 
+        # self.goal_process.wait()
+        # time.sleep(2)
+        # os.killpg(os.getpgid(self.policy_process.pid), signal.SIGTERM)
+        # self.policy_process.wait()
+
+        # if mode == "p2p":
+        #     # wait for the goal process to finish, then kill nodes:
+        #     self.goal_process.wait()
+        #     os.killpg(os.getpgid(self.policy_process.pid), signal.SIGTERM)
+        #     self.policy_process.wait()
+        # elif mode == "path":
+        #     # wait for both the goal client and the goal server to shut down:
+        #     self.goal_sequence_client.wait()
+        #     self.goal_sequence_server.wait()
+        #     os.killpg(os.getpgid(self.policy_process.pid), signal.SIGTERM)
+        #     self.policy_process.wait()
+            
         # re-enable the button from background thread safely using a signal:
         self.navigation_finished.emit()
 
@@ -238,6 +265,9 @@ class MainWindow(QWidget):
         # modify the button state:
         self.nav_button.setEnabled(True)
         self.nav_button.setText("Navigate")
+
+        self.reset_button.setEnabled(True)
+        self.reset_button.setText("Reset")
 
     # method for re-enabling the reset button:
     def _on_reset_finished(self):
