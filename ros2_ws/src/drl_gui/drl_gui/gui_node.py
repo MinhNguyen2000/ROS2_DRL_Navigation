@@ -129,6 +129,9 @@ class MainWindow(QWidget):
         self.nav_button.setEnabled(False)
         self.nav_button.setText("Running...")
 
+        self.reset_button.setEnabled(False)
+        self.reset_button.setText("Currently Navigating")
+
         # gather the values needed to launch:
         model_name = self.model_combo_box.currentText()
         path_name = self.path_combo_box.currentText()
@@ -165,7 +168,7 @@ class MainWindow(QWidget):
                 self.goal_process = subprocess.Popen(["ros2", "run", "drl_policy", "goal_client", x, y, tolerance])
 
                 # monitor in a thread so the GUI does not kill itself:
-                threading.Thread(target = self._monitor_process(), daemon = True).start()
+                threading.Thread(target = self._monitor_process, daemon = True).start()
         # this is the path navigation mode:
         else:
             # for debugging:
