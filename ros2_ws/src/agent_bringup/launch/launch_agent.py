@@ -26,7 +26,7 @@ def generate_launch_description():
     gazebo_launch_path = PathJoinSubstitution([pkg_path, "launch", "launch_world.py"])
     bridge_path_1 = os.path.join(pkg_path, "config", "gz_bridge_ros_control.yaml")
     bridge_path_2 = os.path.join(pkg_path, "config", "gz_bridge_gazebo_control.yaml")
-    ekf_params_path = os.path.join(pkg_path, "config", "ekf_params.yaml")
+    odom_launch_path = PathJoinSubstitution([pkg_path, "launch", "launch_odom.py"])
 
     # define the launch arguments:
     use_sim_time = LaunchConfiguration("use_sim_time")
@@ -114,51 +114,9 @@ def generate_launch_description():
         condition = IfCondition(use_ros_control)
     )
 
-    laser_scan_matcher = Node(
-        package = "rf2o_laser_odometry",
-        executable = "rf2o_laser_odometry_node",
-        name = "rf2o_laser_odometry",
-        namespace = agent_name,
-        output = "screen",
-        parameters = [{
-            "laser_scan_topic" : "scan",
-            "odom_topic" : "lidar_odom",
-            "publish_tf" : False,
-            "base_frame_id" : f"{agent_name}_base_link",
-            "odom_frame_id" : "odom",
-            "init_pose_from_topic" : "",
-            "freq" : 60.0}],
-        condition = IfCondition(use_ros_control)
-    )
-
-    covariance_filter_node = Node(
-        package = "covariance_filter",
-        executable = "covariance_filter_node",
-        name = "covariance_filter",
-        output = "screen",
-        condition = IfCondition(use_ros_control)
-    )
-
-    covariance_filter_node = GroupAction(
-        actions = [
-            PushRosNamespace(agent_name),
-            covariance_filter_node
-        ]
-    )
-
-    ekf_node = Node(
-        package = "robot_localization",
-        executable = "ekf_node",
-        name = "ekf_filter_node",
-        namespace = agent_name, 
-        output = "screen",
-        parameters = [ekf_params_path, {"use_sim_time" : use_sim_time}],
-        remappings = [
-                    #   ("wheel_odom", f"{agent_name}/wheel_odom"),
-                    #   ("lidar_odom_filtered", f"{agent_name}/lidar_odom_filtered"),
-                    #   ("imu_data_filtered", f"{agent_name}/imu_data_filtered"),
-                      ("odometry/filtered", "odom")],
-        condition = IfCondition(use_ros_control)
+    odom_nodes = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([odom_launch_path]),
+        launch_arguments = {"use_sim_time" : use_sim_time}.items()
     )
 
     return LaunchDescription([
@@ -172,8 +130,6 @@ def generate_launch_description():
         ros_gz_bridge_ros_control,
         diff_drive_spawner,
         joint_broadcaster_spawner, 
-        laser_scan_matcher,
-        covariance_filter_node,
-        ekf_node
+        odom_nodes
     ])
     
