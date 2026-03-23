@@ -1,6 +1,7 @@
 # import packages:
 import sys
 import os
+import json
 import time
 import threading
 import signal
@@ -10,6 +11,7 @@ from rclpy.node import Node
 from ament_index_python.packages import get_package_share_directory
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QComboBox, QPushButton
 from PyQt5.QtCore import QTimer, Qt, pyqtSignal
+from qtwidgets import AnimatedToggle
 
 # node class:
 class GuiNode(Node):
@@ -39,7 +41,7 @@ class MainWindow(QWidget):
        
         # instantiate a series of child layouts:
         grid1 = QGridLayout()     # this is a 2,3 grid, used for the x, y, and tolerance inputs
-        grid2 = QGridLayout()     # this is a 2,1 grid, used for selecting the model
+        grid2 = QGridLayout()     # this is a 2,2 grid, used for selecting the model
         row1 = QHBoxLayout()      # this is a single row that will contain the navigation button
 
         # need to define what each row/grid contains now:
@@ -56,20 +58,43 @@ class MainWindow(QWidget):
         grid1.addWidget(self.y_input,         1, 1)     # add the y position to the gui
         grid1.addWidget(self.tolerance_input, 1, 2)     # add the tolerance to the gui
 
-        # grid 2 - model selection:
+        # grid 2 - model selection and path selection:
+        # model selection part:
         grid2.addWidget(QLabel("Model"),  0, 0, alignment = Qt.AlignCenter)     # add the label to the grid
-        self.combo_box = QComboBox()                                            # instantiate the ComboBox
-        policy_path = get_package_share_directory("drl_policy")                 # define the path to the policy which contains the models
-        model_path = os.path.join(policy_path, "policy")                        # get the path of the model directory
+        self.model_combo_box = QComboBox()                                      # instantiate the ComboBox
+        node_path = get_package_share_directory("drl_policy")                   # define the path to the policy which contains the models
+        model_path = os.path.join(node_path, "policy")                        # get the path of the model directory
         models = os.listdir(model_path)                                         # list out the models within this directory
 
         # for every model in the directory:
         for model in models:
             # add the model to the ComboBox:
-            self.combo_box.addItem(model)
+            self.model_combo_box.addItem(model)
 
         # add the ComboBox to the grid:
-        grid2.addWidget(self.combo_box, 1, 0, alignment = Qt.AlignCenter) 
+        grid2.addWidget(self.model_combo_box, 1, 0, alignment = Qt.AlignCenter)
+
+        # mode toggling part:
+        grid2.addWidget(QLabel("Mode"), 0, 1, alignment = Qt.AlignCenter)                       # add a label for the toggle
+        self.mode_toggle = LabeledToggle(left_label = "Point-to-Point", right_label = "Path")   # add the custom toggle
+        grid2.addWidget(self.mode_toggle, 1, 1, alignment = Qt.AlignCenter)                     # add custom toggle to grid
+
+        # path selection part:
+        grid2.addWidget(QLabel("Path"), 0, 2, alignment = Qt.AlignCenter)   # add the label to the grid
+        self.path_combo_box = QComboBox()                                   # instantiate the ComboBox
+        path_path = os.path.join(node_path, "paths", "paths.json")          # set the path to the JSON file
+
+        # read the JSON file:
+        with open(path_path, 'r') as f:
+            data_list = json.load(f)
+
+        # for every key in the dict:
+        for key in data_list:
+            # add the key to the ComboBox:
+            self.path_combo_box.addItem(key)
+
+        # add the ComboBox to the grid:
+        grid2.addWidget(self.path_combo_box, 1, 2, alignment = Qt.AlignCenter)
 
         # row 1 - buttons:
         self.nav_button = QPushButton("Navigate")                       # instantiate the QPushButton
@@ -105,26 +130,60 @@ class MainWindow(QWidget):
         self.nav_button.setText("Running...")
 
         # gather the values needed to launch:
-        model_name = self.combo_box.currentText()
+        model_name = self.model_combo_box.currentText()
+        path_name = self.path_combo_box.currentText()
         x = self.x_input.text()
         y = self.y_input.text()
         tolerance = self.tolerance_input.text()
 
-        if not x or not y or not tolerance:
-            print("Please pass a value for navigation.")
-            self._on_navigation_finished()
+        # check to see if Gazebo is running:
+        result = subprocess.run(["ros2", "node", "list"], capture_output = True, text = True)
+
+        # check to see if Gazebo is running:
+        if "/agent/ekf_filter_node" not in result.stdout:
+            print("Please launch Gazebo before attempting navigation.")
+            self.navigation_finished.emit()
+            return
         else:
             # launch the policy node:
             self.policy_process = subprocess.Popen(["ros2", "run", "drl_policy", "policy_node",
                                                     "--ros-args", "-p", f"model_name:={model_name}"], 
-                                                    start_new_session = True
-                                                    )
+                                                    start_new_session = True)
             
-            # launch the goal client:
-            self.goal_process = subprocess.Popen(["ros2", "run", "drl_policy", "goal_client", x, y, tolerance])
+        # now check to see what mode we are in:
+        if not self.mode_toggle.isChecked():    # this is p2p mode
+            # set the mode of navigation:
+            # mode = "p2p"
 
-            # monitor in a thread so the GUI does not kill itself:
-            threading.Thread(target = self._monitor_process, daemon = True).start()
+            # check to see if there are empty fields:
+            if not x or not y or not tolerance:
+                print("Please populate missing values for navigation.")
+                self.navigation_finished.emit()
+            # otherwise launch goal client:
+            else:
+                # launch the goal client:
+                self.goal_process = subprocess.Popen(["ros2", "run", "drl_policy", "goal_client", x, y, tolerance])
+
+                # monitor in a thread so the GUI does not kill itself:
+                threading.Thread(target = self._monitor_process(), daemon = True).start()
+        # this is the path navigation mode:
+        else:
+            # for debugging:
+            print(f"path mode")
+            self.navigation_finished.emit()
+
+
+            # set the mode of navigation:
+            # mode = "path"
+
+            # # launch the goal_sequence_server:
+            # self.goal_sequence_server = subprocess.Popen(["ros2", "run", "drl_policy", "goal_sequence_server"])
+
+            # # launch the goal sequence client:
+            # self.goal_sequence_client = subprocess.Popen(["ros2", "run", "drl_policy", "goal_sequence_client", path_name, tolerance, "false"])
+            
+            # # monitor in a thread so the GUI does not kill itself:
+            # threading.Thread(target = self._monitor_process(mode), daemon = True).start()
 
     # function that the reset button is to execute:
     def _on_reset_button_clicked(self):
@@ -182,7 +241,28 @@ class MainWindow(QWidget):
         # modify the button state:
         self.reset_button.setEnabled(True)
         self.reset_button.setText("Reset")
+
+# custom toggle:
+class LabeledToggle(QWidget):
+    # constructor:
+    def __init__(self, left_label, right_label):
+        # inherit from parent:
+        super().__init__()
         
+        # define custom toggle:
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(QLabel(left_label))
+        self.toggle = AnimatedToggle()
+        layout.addWidget(self.toggle)
+        layout.addWidget(QLabel(right_label))
+
+        # set the layout:
+        self.setLayout(layout)
+
+    def isChecked(self):
+        return self.toggle.isChecked()
+
 # define the main execution of the node:
 def main():
     # initialize rclpy:
@@ -209,6 +289,7 @@ def main():
     signal.signal(signal.SIGINT, lambda *args: app.quit())
     exit_code = app.exec_()
     node.destroy_node()
+    time.sleep(1)
     rclpy.shutdown()
     sys.exit(exit_code)
 
