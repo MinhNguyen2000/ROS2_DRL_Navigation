@@ -3,7 +3,9 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Imu
 from nav_msgs.msg import Odometry
+from rclpy.executors import ExternalShutdownException
 import copy
+import signal
 
 class CovFilter(Node):
     def __init__(self):
@@ -86,9 +88,18 @@ class CovFilter(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = CovFilter()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+
+    # catch sigterm from GUI:
+    signal.signal(signal.SIGTERM, lambda *args: rclpy.shutdown())
+
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == "__main__":
     main()

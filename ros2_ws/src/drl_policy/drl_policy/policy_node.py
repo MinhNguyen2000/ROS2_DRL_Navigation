@@ -17,6 +17,7 @@ import os
 import pickle
 import time
 import copy
+import signal
 
 class DRLPolicyNode(Node):
     def __init__(self):
@@ -406,6 +407,9 @@ def main():
     node = DRLPolicyNode()
     executor = MultiThreadedExecutor()
     executor.add_node(node)
+
+    # catch sigterm from GUI:
+    signal.signal(signal.SIGTERM, lambda *args: executor.shutdown())
 
     try: 
         executor.spin()
