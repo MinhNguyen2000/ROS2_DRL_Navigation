@@ -24,6 +24,7 @@ class GuiNode(Node):
 class MainWindow(QWidget):
     # signal for updating GUI from background threads:
     navigation_finished = pyqtSignal()
+    resetting_finished = pyqtSignal()
 
     # constructor for window:
     def __init__(self):
@@ -43,21 +44,21 @@ class MainWindow(QWidget):
 
         # need to define what each row/grid contains now:
         # grid 1 - goal parameters:
-        grid1.addWidget(QLabel("x"),         0, 0, alignment = Qt.AlignCenter)
-        grid1.addWidget(QLabel("y"),         0, 1, alignment = Qt.AlignCenter)
-        grid1.addWidget(QLabel("tolerance"), 0, 2, alignment = Qt.AlignCenter)
+        grid1.addWidget(QLabel("X"),         0, 0, alignment = Qt.AlignCenter)  # labelled text widget for x position
+        grid1.addWidget(QLabel("Y"),         0, 1, alignment = Qt.AlignCenter)  # labelled text widget for y position
+        grid1.addWidget(QLabel("Tolerance"), 0, 2, alignment = Qt.AlignCenter)  # labelled text widget for tolerance
 
-        self.x_input = QLineEdit()
-        self.y_input = QLineEdit()
-        self.tolerance_input = QLineEdit()
+        self.x_input = QLineEdit()          # instantiate the text input for x position, so that it may be used later
+        self.y_input = QLineEdit()          # instantiate the text input for y position, so that it may be used later
+        self.tolerance_input = QLineEdit()  # instantiate the text input for tolerance, so that it may be used later
 
-        grid1.addWidget(self.x_input,         1, 0)
-        grid1.addWidget(self.y_input,         1, 1)
-        grid1.addWidget(self.tolerance_input, 1, 2)
+        grid1.addWidget(self.x_input,         1, 0)     # add the x position to the gui
+        grid1.addWidget(self.y_input,         1, 1)     # add the y position to the gui
+        grid1.addWidget(self.tolerance_input, 1, 2)     # add the tolerance to the gui
 
         # grid 2 - model selection:
-        grid2.addWidget(QLabel("model"),  0, 0, alignment = Qt.AlignCenter)     # add the label to the grid
-        self.combo_box = QComboBox()                                                 # instantiate the ComboBox
+        grid2.addWidget(QLabel("Model"),  0, 0, alignment = Qt.AlignCenter)     # add the label to the grid
+        self.combo_box = QComboBox()                                            # instantiate the ComboBox
         policy_path = get_package_share_directory("drl_policy")                 # define the path to the policy which contains the models
         model_path = os.path.join(policy_path, "policy")                        # get the path of the model directory
         models = os.listdir(model_path)                                         # list out the models within this directory
@@ -68,12 +69,16 @@ class MainWindow(QWidget):
             self.combo_box.addItem(model)
 
         # add the ComboBox to the grid:
-        grid2.addWidget(self.combo_box, 1, 0, alignment = Qt.AlignCenter)
+        grid2.addWidget(self.combo_box, 1, 0, alignment = Qt.AlignCenter) 
 
-        # row 1 - button for navigation:
-        self.nav_button = QPushButton("navigate!")
-        self.nav_button.clicked.connect(self._on_button_clicked)
-        row1.addWidget(self.nav_button)
+        # row 1 - buttons:
+        self.nav_button = QPushButton("Navigate")                       # instantiate the QPushButton
+        self.nav_button.clicked.connect(self._on_nav_button_clicked)    # connect its functionality  
+        row1.addWidget(self.nav_button)                                 # add to gui
+
+        self.reset_button = QPushButton("Reset")                            # instantiate the QPushButton
+        self.reset_button.clicked.connect(self._on_reset_button_clicked)    # connect its functionality  
+        row1.addWidget(self.reset_button)                                   # add to gui
 
         # add the grids/rows to the outer layout:
         main_layout.addLayout(grid1)
@@ -83,11 +88,12 @@ class MainWindow(QWidget):
         # apply the layout:
         self.setLayout(main_layout)
 
-        # connect signal:
+        # connect signals:
         self.navigation_finished.connect(self._on_navigation_finished)
+        self.resetting_finished.connect(self._on_reset_finished)
 
-    # function that the button is to execute:
-    def _on_button_clicked(self):
+    # function that the nav button is to execute:
+    def _on_nav_button_clicked(self):
         # I think that this navigation button should launch both the policy node and the goal client.
         # - it should append the model type to the policy node
         # - it should pull values from the class to populate the goal client
@@ -104,17 +110,30 @@ class MainWindow(QWidget):
         y = self.y_input.text()
         tolerance = self.tolerance_input.text()
 
-        # launch the policy node:
-        self.policy_process = subprocess.Popen(["ros2", "run", "drl_policy", "policy_node",
-                                                "--ros-args", "-p", f"model_name:={model_name}"], 
-                                                start_new_session = True
-                                                )
-        
-        # launch the goal client:
-        self.goal_process = subprocess.Popen(["ros2", "run", "drl_policy", "goal_client", x, y, tolerance])
+        if not x or not y or not tolerance:
+            print("Please pass a value for navigation.")
+            self._on_navigation_finished()
+        else:
+            # launch the policy node:
+            self.policy_process = subprocess.Popen(["ros2", "run", "drl_policy", "policy_node",
+                                                    "--ros-args", "-p", f"model_name:={model_name}"], 
+                                                    start_new_session = True
+                                                    )
+            
+            # launch the goal client:
+            self.goal_process = subprocess.Popen(["ros2", "run", "drl_policy", "goal_client", x, y, tolerance])
 
-        # monitor in a thread so the GUI does not kill itself:
-        threading.Thread(target = self._monitor_process, daemon = True).start()
+            # monitor in a thread so the GUI does not kill itself:
+            threading.Thread(target = self._monitor_process, daemon = True).start()
+
+    # function that the reset button is to execute:
+    def _on_reset_button_clicked(self):
+        # lock user out while button is running:
+        self.reset_button.setEnabled(False)
+        self.reset_button.setText("Resetting...")
+
+        # use another thread:
+        threading.Thread(target = self._reset_process, daemon = True).start()
 
     # method for monitoring if navigation is done:
     def _monitor_process(self):
@@ -123,17 +142,46 @@ class MainWindow(QWidget):
         os.killpg(os.getpgid(self.policy_process.pid), signal.SIGTERM)
         self.policy_process.wait()
 
-        # self.nav_button.setText("Cleaning up...")
-        # time.sleep(4.0)
-
         # re-enable the button from background thread safely using a signal:
         self.navigation_finished.emit()
 
-    # method for re-enabling the button:
+    # method for doing the reset process:
+    def _reset_process(self):
+        # define initial position of the agent:
+        x = "-3.0"
+        y = "-3.0"
+        z = "0.0"
+
+        # move the position of the agent:
+        subprocess.run(["ign", "service", "-s", "/world/world_1/set_pose",
+                        "--reqtype", "ignition.msgs.Pose",
+                        "--reptype", "ignition.msgs.Boolean", 
+                        "--timeout", "2000",
+                        "--req", f"name: 'agent', position: {{x: {x}, y: {y}, z: {z}}}"])
+
+        # kill the previous nodes:
+        subprocess.run(["pkill", "-f", "rf2o_laser_odometry"])
+        subprocess.run(["pkill", "-f", "covariance_filter"])
+        subprocess.run(["pkill", "-f", "ekf_filter_node"])
+
+        # call the launch file:
+        subprocess.Popen(["ros2", "launch", "agent_bringup", "launch_odom.py"])
+
+        # re-enable the button:
+        time.sleep(2)
+        self.resetting_finished.emit()
+
+    # method for re-enabling the nav button:
     def _on_navigation_finished(self):
         # modify the button state:
         self.nav_button.setEnabled(True)
         self.nav_button.setText("Navigate")
+
+    # method for re-enabling the reset button:
+    def _on_reset_finished(self):
+        # modify the button state:
+        self.reset_button.setEnabled(True)
+        self.reset_button.setText("Reset")
         
 # define the main execution of the node:
 def main():
