@@ -14,6 +14,7 @@ from geometry_msgs.msg import Quaternion
 import os, json
 import time
 import numpy as np
+import signal
 
 class GoalSequenceServer(Node):
     '''
@@ -261,6 +262,9 @@ def main():
     node = GoalSequenceServer()
     executor = MultiThreadedExecutor()
     executor.add_node(node)
+
+    # catch sigterm from GUI:
+    signal.signal(signal.SIGTERM, lambda *args: executor.shutdown())
 
     try:
         executor.spin()
