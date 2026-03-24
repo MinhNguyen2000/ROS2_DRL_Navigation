@@ -192,7 +192,6 @@ class MainWindow(QWidget):
                                                     "--ros-args", "-p", f"model_name:={model_name}"], 
                                                     start_new_session = True)
             
-            time.sleep(1)
             # launch the goal_sequence_server:
             self.goal_sequence_server = subprocess.Popen(["ros2", "run", "drl_policy", "goal_sequence_server"],
                                                           start_new_session = True)
@@ -218,31 +217,18 @@ class MainWindow(QWidget):
         if mode == "path":
             self.goal_sequence_client.wait()
             os.killpg(os.getpgid(self.goal_sequence_server.pid), signal.SIGTERM)
-            self.goal_sequence_server.wait()
+            try:
+                self.goal_sequence_server.wait(timeout = 1.0)
+            except subprocess.TimeoutExpired:
+                os.killpg(os.getpgid(self.goal_sequence_server.pid), signal.SIGKILL)
+                self.goal_sequence_server.wait()
+
         elif mode == "p2p":
             self.goal_process.wait()
 
         # kill drl_policy:
-        time.sleep(2)
         os.killpg(os.getpgid(self.policy_process.pid), signal.SIGTERM)
         self.policy_process.wait()
-
-        # self.goal_process.wait()
-        # time.sleep(2)
-        # os.killpg(os.getpgid(self.policy_process.pid), signal.SIGTERM)
-        # self.policy_process.wait()
-
-        # if mode == "p2p":
-        #     # wait for the goal process to finish, then kill nodes:
-        #     self.goal_process.wait()
-        #     os.killpg(os.getpgid(self.policy_process.pid), signal.SIGTERM)
-        #     self.policy_process.wait()
-        # elif mode == "path":
-        #     # wait for both the goal client and the goal server to shut down:
-        #     self.goal_sequence_client.wait()
-        #     self.goal_sequence_server.wait()
-        #     os.killpg(os.getpgid(self.policy_process.pid), signal.SIGTERM)
-        #     self.policy_process.wait()
             
         # re-enable the button from background thread safely using a signal:
         self.navigation_finished.emit()
