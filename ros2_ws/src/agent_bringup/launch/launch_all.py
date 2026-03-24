@@ -29,7 +29,7 @@ def generate_launch_description():
     use_sim_time_arg = DeclareLaunchArgument(
         "use_sim_time",
         default_value = "true",
-        description = "Whether or not to use sim time, defaulting to false."
+        description = "Whether or not to use sim time, defaulting to false"
     )
 
     use_ros_control = LaunchConfiguration("use_ros_control")
@@ -39,12 +39,20 @@ def generate_launch_description():
         description = "If true, control the agent using ros2_control, otherwise, use Gazebo plugins. Defaults to false"
     )
 
+    use_rviz = LaunchConfiguration("use_rviz")
+    use_rviz_arg = DeclareLaunchArgument(
+        "use_rviz",
+        default_value = "true",
+        description = "Whether or not to launch RVIZ, defaulting to true"
+    )
+
     def launch_setup(context):
         world_str = LaunchConfiguration("world").perform(context)
         world_name = world_str.split('.')[0]
 
         launch_rviz = IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([rviz_launch_path])
+            PythonLaunchDescriptionSource([rviz_launch_path]), 
+            condition = IfCondition(use_rviz)
         )
 
         x_offset = -3.0 if world_name == "world_1" else -1.0
@@ -65,7 +73,7 @@ def generate_launch_description():
             package = 'drl_gui',
             executable = 'gui_node',
             name = 'drl_gui_node',
-            arguments = [{
+            parameters = [{
                 'x_offset': x_offset,
                 'y_offset': y_offset
             }]
@@ -81,6 +89,7 @@ def generate_launch_description():
         world_arg,
         use_sim_time_arg,
         use_ros_control_arg,
+        use_rviz_arg,
         OpaqueFunction(function=launch_setup)
     ])
     
