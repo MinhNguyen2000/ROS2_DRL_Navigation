@@ -1,6 +1,7 @@
 import os, json
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import numpy as np
 
 CURRENT_DIR         = os.path.dirname(os.path.abspath(__file__))
 SAVED_PATHS_DIR     = os.path.join(CURRENT_DIR, '..', 'src', 'drl_policy', 'recorded_paths')
@@ -27,8 +28,23 @@ def main():
 
         elapsed_time = data["elapsed_time"]
         total_distance = data["total_distance"]
+        
+        line = ax.plot(x, y, '--', alpha=0.7, lw=2, label=f"{MODEL_NAME} | {elapsed_time: 6.2f}s | {total_distance: 6.2f}m")
 
-        ax.plot(x, y, '--', alpha=0.7, lw=3, label=f"{MODEL_NAME} | {elapsed_time: 6.2f}s | {total_distance: 6.2f}m")
+        ARROW_EVERY_N = 250
+        indices = range(0, len(x), ARROW_EVERY_N)
+
+        ax.quiver(
+            [x[i] for i in indices], 
+            [y[i] for i in indices], 
+            [np.cos(yaw[i]) for i in indices],
+            [np.sin(yaw[i]) for i in indices],
+            color=line[0].get_color(),
+            scale=50,
+            width=0.004,
+            headwidth=4, headlength=5,
+            alpha=0.8
+        )
 
     # --- TODO: Visualize the obstacles ---
     WORLD = 'world_1'
