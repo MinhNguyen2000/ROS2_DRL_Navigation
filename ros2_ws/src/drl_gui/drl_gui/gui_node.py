@@ -127,8 +127,8 @@ class MainWindow(QWidget):
         self.setLayout(main_layout)
 
         # connect signals:
-        self.navigation_finished.connect(self._on_navigation_finished)
-        self.resetting_finished.connect(self._on_reset_finished)
+        self.navigation_finished.connect(self._on_button_finish)
+        self.resetting_finished.connect(self._on_button_finish)
 
     # function that the nav button is to execute:
     def _on_nav_button_clicked(self):
@@ -205,6 +205,9 @@ class MainWindow(QWidget):
     # function that the reset button is to execute:
     def _on_reset_button_clicked(self):
         # lock user out while button is running:
+        self.nav_button.setEnabled(False)
+        self.nav_button.setText("Resetting...")
+
         self.reset_button.setEnabled(False)
         self.reset_button.setText("Resetting...")
 
@@ -254,18 +257,12 @@ class MainWindow(QWidget):
         time.sleep(2)
         self.resetting_finished.emit()
 
-    # method for re-enabling the nav button:
-    def _on_navigation_finished(self):
+    # method for re-enabling the buttons:
+    def _on_button_finish(self):
         # modify the button state:
         self.nav_button.setEnabled(True)
         self.nav_button.setText("Navigate")
 
-        self.reset_button.setEnabled(True)
-        self.reset_button.setText("Reset")
-
-    # method for re-enabling the reset button:
-    def _on_reset_finished(self):
-        # modify the button state:
         self.reset_button.setEnabled(True)
         self.reset_button.setText("Reset")
 
