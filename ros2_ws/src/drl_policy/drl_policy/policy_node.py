@@ -29,7 +29,7 @@ class DRLPolicyNode(Node):
         self.declare_parameter('model_name', 'TD3_001')
         self.declare_parameter('max_lin_vel', 0.6)
         self.declare_parameter('max_angular_vel', 0.9)
-        self.declare_parameter('goal_timeout', 15.0)
+        self.declare_parameter('goal_timeout', 30.0)
 
         self.default_goal_tolerance     = self.get_parameter('goal_tolerance').value
         self.default_obstacle_tolerance = self.get_parameter('obstacle_tolerance').value
@@ -438,8 +438,8 @@ def main():
         pass
     finally:
         node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+        # if rclpy.ok():
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':

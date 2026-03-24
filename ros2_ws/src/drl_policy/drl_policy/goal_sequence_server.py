@@ -179,10 +179,11 @@ class GoalSequenceServer(Node):
                     result_msg.success = False
                     result_msg.message = f'Stopped at waypoint {idx + 1}: {nav_result.message}'
                     return result_msg
+            
+            self._elapsed_time = time.time() - start
                 
         # --- Check if all waypoints done (all goals) ---
         all_waypoints = result_msg.waypoints_completed == total
-        self._elapsed_time = time.time() - start
         seq_goal_handle.succeed()
         result_msg.success = all_waypoints
         result_msg.message = 'All waypoints completed' if all_waypoints else f'Completed {result_msg.waypoints_completed}/{total} waypoints.'
@@ -233,9 +234,11 @@ class GoalSequenceServer(Node):
             self.get_logger().error(f'Failed to fetch model name: {e}')
 
     def _save_callback(self, request: Trigger.Request, response: Trigger.Response):
-        pkg_dir = os.path.dirname(os.path.abspath(__file__))
+        ws_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..','..'))
+        save_dir = os.path.join(ws_dir, 'src', 'drl_policy', 'recorded_paths')
+        os.makedirs(save_dir, exist_ok=True)
         record_path_name = f"{self._model_name}_{self._path_name}.json"
-        save_path = os.path.join(pkg_dir, '..', 'recorded_paths', record_path_name)
+        save_path = os.path.join(save_dir, record_path_name)
 
         data = {
             "model_name":       self._model_name,
@@ -272,8 +275,8 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        if rclpy.ok():
-            node.destroy_node()
+        node.destroy_node()
+        # if rclpy.ok():
         rclpy.shutdown()
 
 if __name__ == "__main__":

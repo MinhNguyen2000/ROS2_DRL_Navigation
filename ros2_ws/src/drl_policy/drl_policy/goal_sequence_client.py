@@ -9,7 +9,7 @@ from ament_index_python.packages import get_package_share_directory
 from drl_interfaces.action import NavigateToGoalSequence
 from std_srvs.srv import Trigger
 
-import os, json
+import os, json, time
 
 # --- Load the paths
 pkg_dir = get_package_share_directory('drl_policy')
@@ -68,6 +68,7 @@ class GoalSequenceClient(Node):
             goal,
             feedback_callback=self._feedback_callback
         )
+        self._feedback_time = time.time()
         self._send_future.add_done_callback(self._goal_accepted_callback)
 
     def _goal_accepted_callback(self, future: Future):
@@ -82,16 +83,21 @@ class GoalSequenceClient(Node):
 
     def _feedback_callback(self, feedback):
         f = feedback.feedback
-        self.get_logger().info(
-            f' Time: {f.elapsed_time: 5.2f} | '
-            f'Waypoint {f.current_waypoint + 1}/{f.total_waypoints} | '
-            f'current goal dist: {f.distance_to_current_goal: 5.3f}m'
-        )
+        if (time.time() - self._feedback_time >= 1.0):
+            self._feedback_time = time.time()
+            self.get_logger().info(
+                f' Time: {f.elapsed_time: 5.2f} | '
+                f'Waypoint {f.current_waypoint + 1}/{f.total_waypoints} | '
+                f'current goal dist: {f.distance_to_current_goal: 5.3f}m'
+            )
 
     def _result_callback(self, future: Future):
         '''
         Called at the end after the entire sequence is completed/failed
         '''
+        save_path_future = self._save_path_client.call_async(Trigger.Request())
+        time.sleep(0.5)
+
         result = future.result().result
         status = 'SUCCESS' if result.success else 'FAILED'
         self.get_logger().info(
@@ -101,11 +107,10 @@ class GoalSequenceClient(Node):
         )
         self._done = True
 
-        self._save_path_client.call_async(Trigger.Request())
-
     def cancel(self):
         self.get_logger().info('Sending cancel request to sequence server...')
-        cancel_future = self._goal_handle.cancel_goal_async()
+        if hasattr(self, '_goal_handle'): 
+            cancel_future = self._goal_handle.cancel_goal_async()
 
         while rclpy.ok() and not cancel_future.done():
             rclpy.spin_once(self, timeout_sec=0.1)
@@ -145,8 +150,8 @@ def main():
             rclpy.spin_once(node, timeout_sec=0.1)
     finally:
         node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+        # if rclpy.ok():
+        rclpy.shutdown()
 
 if __name__ == "__main__":
     main()
