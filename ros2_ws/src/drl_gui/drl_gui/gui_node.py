@@ -19,8 +19,17 @@ class GuiNode(Node):
     def __init__(self):
         # inherit from parent type:
         super().__init__("gui_node")
+
         # display to user on startup:
         self.get_logger().info("GUI node started")
+
+        # grab offsets from launch file:
+        self.declare_parameter("x_offset", 0.0)
+        self.declare_parameter("y_offset", 0.0)
+
+        # add to class:
+        self.x_offset = self.get_parameter("x_offset").value
+        self.y_offset = self.get_parameter("y_offset").value
 
 # this is a class which serves as the WINDOW:
 class MainWindow(QWidget):
@@ -29,9 +38,13 @@ class MainWindow(QWidget):
     resetting_finished = pyqtSignal()
 
     # constructor for window:
-    def __init__(self):
+    def __init__(self, x_offset : float, y_offset: float):
         # inherit from parent type:
         super().__init__()
+
+        # set offsets:
+        self.x_offset = x_offset
+        self.y_offset = y_offset
 
         # use internal method of QWidget to set the title of the window:
         self.setWindowTitle("ROS2 DRL GUI")
@@ -236,17 +249,12 @@ class MainWindow(QWidget):
 
     # method for doing the reset process:
     def _reset_process(self):
-        # define initial position of the agent:
-        x = "-3.0"
-        y = "-3.0"
-        z = "0.0"
-
         # move the position of the agent:
         subprocess.run(["ign", "service", "-s", "/world/world_1/set_pose",
                         "--reqtype", "ignition.msgs.Pose",
                         "--reptype", "ignition.msgs.Boolean", 
                         "--timeout", "2000",
-                        "--req", f"name: 'agent', position: {{x: {x}, y: {y}, z: {z}}}"])
+                        "--req", f"name: 'agent', position: {{x: {self.x_offset}, y: {self.y_offset}, z: {0.0}}}"])
 
         # kill the previous nodes:
         subprocess.run(["pkill", "-f", "rf2o_laser_odometry"])
@@ -304,13 +312,17 @@ def main():
     # instantiate the node:
     node = GuiNode()
 
+    # grab the offsets:
+    x_offset = node.get_parameter("x_offset").value
+    y_offset = node.get_parameter("y_offset").value
+
     # spin ROS2 in a background thread so it doesn't block the GUI from working:
     ros_thread = threading.Thread(target = rclpy.spin, args = (node, ), daemon = True)
     ros_thread.start()
 
     # start the GUI:
     app = QApplication(sys.argv)
-    window = MainWindow()
+    window = MainWindow(x_offset = x_offset, y_offset = y_offset)
     window.show()
 
     # allow python to read signals every 500ms:
