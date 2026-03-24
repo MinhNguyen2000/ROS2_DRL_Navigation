@@ -29,13 +29,15 @@ class DRLPolicyNode(Node):
         self.declare_parameter('model_name', 'TD3_001')
         self.declare_parameter('max_lin_vel', 0.6)
         self.declare_parameter('max_angular_vel', 0.9)
+        self.declare_parameter('goal_timeout', 15.0)
 
-        self.default_goal_tolerance = self.get_parameter('goal_tolerance').value
+        self.default_goal_tolerance     = self.get_parameter('goal_tolerance').value
         self.default_obstacle_tolerance = self.get_parameter('obstacle_tolerance').value
-        self.model_name = self.get_parameter('model_name').value
-        self.model_type = self.model_name.split('_')[0]
-        self.max_lin_vel = self.get_parameter('max_lin_vel').value
-        self.max_angular_vel = self.get_parameter('max_angular_vel').value
+        self.model_name                 = self.get_parameter('model_name').value
+        self.model_type                 = self.model_name.split('_')[0]
+        self.max_lin_vel                = self.get_parameter('max_lin_vel').value
+        self.max_angular_vel            = self.get_parameter('max_angular_vel').value
+        self.goal_timeout               = self.get_parameter('goal_timeout').value
 
         # TODO - load the model and extract the number of n_ray_groups for LiDAR group
         # Assume that the models and norm stats are stored under drl_policy/policy/TD3_xxx/model.zip and norm_stats.pkl
@@ -172,14 +174,30 @@ class DRLPolicyNode(Node):
 
         while rclpy.ok():
             ctrl_iter_start = time.time()
+            elapsed_time = time.time() - start
+
             # --- Check for cancellation ---
             if goal_handle.is_cancel_requested:
                 goal_handle.canceled()
-                self.cmd_pub.publish(TwistStamped())   # stop the robot
+                cmd = TwistStamped()
+                cmd.header.stamp = self.get_clock().now().to_msg()
+                self.cmd_pub.publish(cmd)   # stop the robot
                 result_msg.success = False
                 result_msg.message = 'Cancelled by client.'
                 return result_msg
             
+            # --- Check for timeout ---
+            if elapsed_time >= self.goal_timeout:
+                goal_handle.abort()
+                cmd = TwistStamped()
+                cmd.header.stamp = self.get_clock().now().to_msg()
+                self.cmd_pub.publish(cmd)   # stop the robot
+                result_msg.success = False
+                result_msg.message = f'Goal timeout after {elapsed_time:.1f}s'
+                result_msg.total_distance=float(total_distance)
+                self.get_logger().warn(f'Goal timed out after {elapsed_time:.1f}s')
+                return result_msg
+
             # --- Wait for all data ---
             if (self.latest_odom is None) or (self.latest_scan is None):
                 self.get_logger().warn('Waiting for odometry and LiDAR...')
@@ -191,19 +209,21 @@ class DRLPolicyNode(Node):
 
             obs_normed = self._normalize_obs(obs)
             
-            self.get_logger().info(
-                f'obs → ({obs[0]: 5.3f} | {obs[1]: 5.3f} | {obs[2]: 5.3f})   '
-                f'({np.atan2(obs[4], obs[3]): 5.3f} | {np.atan2(obs[6], obs[5]): 5.3f})   '
-                f'({obs[7]: 5.3f}|{obs[8]: 5.3f})   '
-                f'lidar:{obs[9:]}'
-            )
+            # self.get_logger().info(
+            #     f'obs → ({obs[0]: 5.3f} | {obs[1]: 5.3f} | {obs[2]: 5.3f})   '
+            #     f'({np.atan2(obs[4], obs[3]): 5.3f} | {np.atan2(obs[6], obs[5]): 5.3f})   '
+            #     f'({obs[7]: 5.3f}|{obs[8]: 5.3f})   '
+            #     f'lidar:{obs[9:]}'
+            # )
 
             # --- 2. Check termination conditions ---
             d_goal = obs[2]
             min_lidar = np.min(obs[9:])
             # self.get_logger().info(f'Minimum LiDAR reading: {min_lidar}')
             if d_goal <= self.goal_tolerance:
-                self.cmd_pub.publish(TwistStamped())
+                cmd = TwistStamped()
+                cmd.header.stamp = self.get_clock().now().to_msg()
+                self.cmd_pub.publish(cmd)   # stop the robot
                 goal_handle.succeed()
                 result_msg.success=True
                 result_msg.message='Goal reached.'
@@ -212,7 +232,9 @@ class DRLPolicyNode(Node):
                 return result_msg
             
             if min_lidar <= self.obstacle_tolerance:
-                self.cmd_pub.publish(TwistStamped())
+                cmd = TwistStamped()
+                cmd.header.stamp = self.get_clock().now().to_msg()
+                self.cmd_pub.publish(cmd)   # stop the robot
                 goal_handle.abort()
                 result_msg.success=False
                 result_msg.message='Obstacle hit, mission aborted.'
@@ -220,7 +242,6 @@ class DRLPolicyNode(Node):
                 self.get_logger().info(f'Obstacle hit with min_lidar={min_lidar: 5.3f}, mission aborted.')
                 return result_msg
             
-
             # --- 3. DRL policy inference => action ---
             self.action = self._run_policy(obs_normed)          # vx, vyaw in moving agent frame
 
@@ -239,7 +260,7 @@ class DRLPolicyNode(Node):
 
             # --- Extra: Publish Feedback
             feedback_msg.distance_to_goal = float(d_goal)
-            feedback_msg.elapsed_time = float(time.time() - start)
+            feedback_msg.elapsed_time = float(elapsed_time)
             feedback_msg.current_pose = self.latest_odom.pose.pose
             goal_handle.publish_feedback(feedback_msg)
 
@@ -388,13 +409,13 @@ class DRLPolicyNode(Node):
         self.min_dist_last = min_dist
         self.action_last = self.action
 
-        self.get_logger().info(f"r_dist_app: {self.rew_dist_approach_scaled: 5.3f} | "
-                               f"r_head_app: {self.rew_head_approach_scaled: 5.3f} | "
-                               f"r_obs_dist: {self.rew_obs_dist_scaled: 5.3f} | "
-                               f"r_obs_align: {self.rew_obs_align_scaled: 5.3f} | "
-                               f"rew_act_diff: {rew_act_diff: 5.3f} | "
-                               f"r_time: {self.rew_time: 4.2f} | "
-                               f"r_total: {rew: 5.3f}  ")
+        # self.get_logger().info(f"r_dist_app: {self.rew_dist_approach_scaled: 5.3f} | "
+        #                        f"r_head_app: {self.rew_head_approach_scaled: 5.3f} | "
+        #                        f"r_obs_dist: {self.rew_obs_dist_scaled: 5.3f} | "
+        #                        f"r_obs_align: {self.rew_obs_align_scaled: 5.3f} | "
+        #                        f"rew_act_diff: {rew_act_diff: 5.3f} | "
+        #                        f"r_time: {self.rew_time: 4.2f} | "
+        #                        f"r_total: {rew: 5.3f}  ")
 
     def _run_policy(self, obs: np.ndarray) -> np.ndarray:
         with torch.no_grad():

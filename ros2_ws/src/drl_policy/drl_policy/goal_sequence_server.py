@@ -53,10 +53,10 @@ class GoalSequenceServer(Node):
             '/drl_policy_server/get_parameters'
         )
         
-        if self._param_client.wait_for_service(timeout_sec=0.5):
+        if self._param_client.wait_for_service(timeout_sec=1.0):
             self._fetch_model_name()
         else:
-            self.get_logger().warn('Could not reach policy_node to fecth model name')
+            self.get_logger().warn('Could not reach policy_node to fetch model name')
 
         # Service server to save the trajectory from previous run
         self._save_srv = self.create_service(
@@ -73,6 +73,7 @@ class GoalSequenceServer(Node):
 
         self.get_logger().info('Waiting for DRL policy server...')
         self._nav_client.wait_for_server()
+        self.get_logger().info('Got it')
     
     def _goal_callback(self, goal_request: NavigateToGoalSequence.Goal):
         '''

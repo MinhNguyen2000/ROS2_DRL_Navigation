@@ -7,6 +7,7 @@ from geometry_msgs.msg import PoseStamped
 from ament_index_python.packages import get_package_share_directory
 
 from drl_interfaces.action import NavigateToGoalSequence
+from std_srvs.srv import Trigger
 
 import os, json
 
@@ -40,14 +41,19 @@ class GoalSequenceClient(Node):
             f"tolerance={goal_tolerance}m | stop_on_failure={stop_on_failure}"
         )
 
-        self._client = ActionClient(
+        self._navigate_client = ActionClient(
             self,
             NavigateToGoalSequence,
             'navigate_goal_sequence'
         )
 
+        self._save_path_client = self.create_client(
+            Trigger, 
+            'save_path'
+        )
+
         self.get_logger().info('Waiting for goal sequence server...')
-        self._client.wait_for_server()
+        self._navigate_client.wait_for_server()
 
         # --- Create the goals ---
         goal = NavigateToGoalSequence.Goal()
@@ -57,8 +63,8 @@ class GoalSequenceClient(Node):
         goal.stop_on_failure = stop_on_failure
 
         # --- Send goal ---
-        self.get_logger().info(f"Sending path: '{path_name}'")
-        self._send_future = self._client.send_goal_async(
+        self.get_logger().info(f"Sending path: '{path_name}' to the goal sequence server...")
+        self._send_future = self._navigate_client.send_goal_async(
             goal,
             feedback_callback=self._feedback_callback
         )
@@ -94,6 +100,8 @@ class GoalSequenceClient(Node):
             f'Total distance: {result.total_distance: 5.3f}m'
         )
         self._done = True
+
+        self._save_path_client.call_async(Trigger.Request())
 
     def cancel(self):
         self.get_logger().info('Sending cancel request to sequence server...')
