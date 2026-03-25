@@ -59,5 +59,8 @@ testing.py
 # results for training:
 results/
 
+# gazebo recorded paths:
+recorded_paths/
+
 # testing directory - can be kept local, just for playing around with newer features and stuff:
 python/environments/testing/
